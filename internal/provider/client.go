@@ -8,21 +8,24 @@ import (
 	"net/http"
 )
 
+const loginURL = "https://api.thetaedgecloud.com/user/login?expand=redirect_project_id.org_id"
 const baseURL = "https://controller.thetaedgecloud.com"
 
 type Client struct {
-	httpClient *http.Client
-	apiKey     string
-	apiSecret  string
-	authID     string
-	authToken  string
+	httpClient        *http.Client
+	email             string
+	password          string
+	authToken         string
+	redirectProjectID string
+	userID            string
+	orgID             string
 }
 
-func NewClient(apiKey, apiSecret string) *Client {
+func NewClient(email, password string) *Client {
 	client := &Client{
 		httpClient: &http.Client{},
-		apiKey:     apiKey,
-		apiSecret:  apiSecret,
+		email:      email,
+		password:   password,
 	}
 	err := client.authenticate()
 	if err != nil {
@@ -32,17 +35,16 @@ func NewClient(apiKey, apiSecret string) *Client {
 }
 
 func (c *Client) authenticate() error {
-	url := fmt.Sprintf("%s/auth/login", baseURL)
 	payload := map[string]string{
-		"api_key":    c.apiKey,
-		"api_secret": c.apiSecret,
+		"email":    c.email,
+		"password": c.password,
 	}
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", loginURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -64,22 +66,39 @@ func (c *Client) authenticate() error {
 	}
 
 	var authResponse struct {
-		AuthID    string `json:"auth_id"`
-		AuthToken string `json:"auth_token"`
+		Status string `json:"status"`
+		Body   struct {
+			Users []struct {
+				ID                string `json:"id"`
+				AuthToken         string `json:"auth_token"`
+				RedirectProjectID string `json:"redirect_project_id"`
+			} `json:"users"`
+			Projects []struct {
+				ID    string `json:"id"`
+				OrgID string `json:"org_id"`
+			} `json:"projects"`
+		} `json:"body"`
 	}
 	if err := json.Unmarshal(body, &authResponse); err != nil {
 		return err
 	}
 
-	c.authID = authResponse.AuthID
-	c.authToken = authResponse.AuthToken
+	if authResponse.Status != "success" {
+		return fmt.Errorf("authentication failed: %s", body)
+	}
+
+	c.authToken = authResponse.Body.Users[0].AuthToken
+	c.redirectProjectID = authResponse.Body.Users[0].RedirectProjectID
+	c.userID = authResponse.Body.Users[0].ID
+	c.orgID = authResponse.Body.Projects[0].OrgID
+
 	return nil
 }
 
 func (c *Client) doRequest(req *http.Request) ([]byte, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
-	req.Header.Set("X-Auth-Id", c.authID)
+	req.Header.Set("X-Auth-Id", c.userID)
 	req.Header.Set("X-Auth-Token", c.authToken)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

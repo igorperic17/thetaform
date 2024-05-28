@@ -6,11 +6,6 @@ terraform {
   }
 }
 
-provider "theta" {
-  api_key    = var.api_key
-  api_secret = var.api_secret
-}
-
 resource "theta_endpoint" "example" {
   name                = "llama38b31eu8r5y5d"
   project_id          = "prj_8qf89pmjgdqurbaqfpdu3u854s6p"

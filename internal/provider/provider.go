@@ -25,13 +25,14 @@ func (p *ThetaProvider) Schema(ctx context.Context, req provider.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Theta provider",
 		Attributes: map[string]schema.Attribute{
-			"api_key": schema.StringAttribute{
-				MarkdownDescription: "API key for the Theta API",
+			"email": schema.StringAttribute{
+				MarkdownDescription: "Email for the Theta API",
 				Required:            true,
 			},
-			"api_secret": schema.StringAttribute{
-				MarkdownDescription: "API secret for the Theta API",
+			"password": schema.StringAttribute{
+				MarkdownDescription: "Password for the Theta API",
 				Required:            true,
+				Sensitive:           true,
 			},
 		},
 	}
@@ -39,8 +40,8 @@ func (p *ThetaProvider) Schema(ctx context.Context, req provider.SchemaRequest, 
 
 func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config struct {
-		APIKey    string `tfsdk:"api_key"`
-		APISecret string `tfsdk:"api_secret"`
+		Email    string `tfsdk:"email"`
+		Password string `tfsdk:"password"`
 	}
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -48,8 +49,8 @@ func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureReq
 		return
 	}
 
-	client := NewClient(config.APIKey, config.APISecret)
-	if client.authID == "" || client.authToken == "" {
+	client := NewClient(config.Email, config.Password)
+	if client.authToken == "" {
 		resp.Diagnostics.AddError("Authentication Error", "Failed to authenticate with the Theta API")
 		return
 	}

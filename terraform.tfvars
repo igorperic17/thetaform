@@ -1,2 +1,2 @@
-api_key    = "dummy-api-key"
-api_secret = "dummy-api-secret"
+email    = "your-email@example.com"
+password = "your-password"

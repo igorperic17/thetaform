@@ -1,9 +1,10 @@
-variable "api_key" {
-  description = "API key for the Theta API"
+variable "email" {
+  description = "Email for the Theta API"
   type        = string
 }
 
-variable "api_secret" {
-  description = "API secret for the Theta API"
+variable "password" {
+  description = "Password for the Theta API"
   type        = string
+  sensitive   = true
 }
