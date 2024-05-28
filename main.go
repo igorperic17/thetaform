@@ -53,35 +53,3 @@ func main() {
 		log.Fatal(err.Error())
 	}
 }
-
-// func main() {
-
-// 	plugin.Serve(&plugin.ServeOpts{
-// 		ProviderFunc: func() *schema.Provider {
-// 			return &schema.Provider{
-// 				Schema: map[string]*schema.Schema{
-// 					"base_url": {
-// 						Type:        schema.TypeString,
-// 						Required:    true,
-// 						DefaultFunc: schema.EnvDefaultFunc("THETA_BASE_URL", nil),
-// 					},
-// 					"api_key": {
-// 						Type:        schema.TypeString,
-// 						Required:    true,
-// 						DefaultFunc: schema.EnvDefaultFunc("THETA_API_KEY", nil),
-// 					},
-// 				},
-// 				ResourcesMap: map[string]*schema.Resource{
-// 					"theta_endpoint": provider.NewEndpoint(),
-// 				},
-// 				ConfigureFunc: configureProvider,
-// 			}
-// 		},
-// 	})
-// }
-
-// func configureProvider(d *schema.ResourceData) (interface{}, error) {
-// 	baseURL := d.Get("base_url").(string)
-// 	apiKey := d.Get("api_key").(string)
-// 	return provider.NewClient(baseURL, apiKey), nil
-// }

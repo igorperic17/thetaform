@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -15,24 +17,29 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-type EndpointResource struct {
+const (
+	maxRetries = 60
+	retryDelay = 10 * time.Second
+)
+
+type DeploymentResource struct {
 	client *Client
 }
 
-func NewEndpoint() resource.Resource {
-	return &EndpointResource{}
+func NewDeployment() resource.Resource {
+	return &DeploymentResource{}
 }
 
-func (r *EndpointResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_endpoint"
+func (r *DeploymentResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_deployment"
 }
 
-func (r *EndpointResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *DeploymentResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Theta Endpoint Deployment",
+		MarkdownDescription: "Theta Deployment",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Endpoint name",
+				MarkdownDescription: "Deployment name",
 				Required:            true,
 			},
 			"project_id": schema.StringAttribute{
@@ -88,7 +95,7 @@ func (r *EndpointResource) Schema(ctx context.Context, req resource.SchemaReques
 	}
 }
 
-func (r *EndpointResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *DeploymentResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -106,7 +113,7 @@ func (r *EndpointResource) Configure(ctx context.Context, req resource.Configure
 	r.client = client
 }
 
-type EndpointResourceModel struct {
+type DeploymentResourceModel struct {
 	ID                types.String `tfsdk:"id"`
 	Name              types.String `tfsdk:"name"`
 	ProjectID         types.String `tfsdk:"project_id"`
@@ -145,8 +152,8 @@ func convertStringMapToMap(input map[string]string) (types.Map, diag.Diagnostics
 	return types.MapValue(types.StringType, elements)
 }
 
-func (r *EndpointResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data EndpointResourceModel
+func (r *DeploymentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data DeploymentResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -164,7 +171,7 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	endpoint := &Endpoint{
+	deployment := &Deployment{
 		Name:              data.Name.ValueString(),
 		ProjectID:         data.ProjectID.ValueString(),
 		DeploymentImageID: data.DeploymentImageID.ValueString(),
@@ -176,64 +183,78 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		EnvVars:           envVars,
 	}
 
-	createdEndpoint, err := r.client.CreateEndpoint(endpoint)
+	createdDeployment, err := r.client.CreateDeployment(deployment)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create endpoint, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create deployment, got error: %s", err))
 		return
 	}
 
-	data.ID = types.StringValue(createdEndpoint.ID)
-	data.Suffix = types.StringValue(createdEndpoint.Suffix)
-	data.URL = types.StringValue(createdEndpoint.URL)
+	data.ID = types.StringValue(createdDeployment.ID)
+	data.Suffix = types.StringValue(createdDeployment.Suffix)
+	data.URL = types.StringValue(createdDeployment.URL)
 
 	tflog.Trace(ctx, "created a resource")
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	// Polling mechanism to wait for the deployment URL to become available
+	for i := 0; i < maxRetries; i++ {
+		resp.Diagnostics.Append(resp.State.Get(ctx, &data)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		resp, err := http.Get(data.URL.ValueString())
+		if err == nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
 }
 
-func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data EndpointResourceModel
+func (r *DeploymentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data DeploymentResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	endpoint, err := r.client.GetEndpoint(data.Suffix.ValueString())
+	deployment, err := r.client.GetDeployment(data.Suffix.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read endpoint, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read deployment, got error: %s", err))
 		return
 	}
 
-	annotations, diags := convertStringMapToMap(endpoint.Annotations)
+	annotations, diags := convertStringMapToMap(deployment.Annotations)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	envVars, diags := convertStringMapToMap(endpoint.EnvVars)
+	envVars, diags := convertStringMapToMap(deployment.EnvVars)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	data.ID = types.StringValue(endpoint.ID)
-	data.Name = types.StringValue(endpoint.Name)
-	data.ProjectID = types.StringValue(endpoint.ProjectID)
-	data.DeploymentImageID = types.StringValue(endpoint.DeploymentImageID)
-	data.ContainerImage = types.StringValue(endpoint.ContainerImage)
-	data.MinReplicas = types.Int64Value(int64(endpoint.MinReplicas))
-	data.MaxReplicas = types.Int64Value(int64(endpoint.MaxReplicas))
-	data.VMID = types.StringValue(endpoint.VMID)
+	data.ID = types.StringValue(deployment.ID)
+	data.Name = types.StringValue(deployment.Name)
+	data.ProjectID = types.StringValue(deployment.ProjectID)
+	data.DeploymentImageID = types.StringValue(deployment.DeploymentImageID)
+	data.ContainerImage = types.StringValue(deployment.ContainerImage)
+	data.MinReplicas = types.Int64Value(int64(deployment.MinReplicas))
+	data.MaxReplicas = types.Int64Value(int64(deployment.MaxReplicas))
+	data.VMID = types.StringValue(deployment.VMID)
 	data.Annotations = annotations
 	data.EnvVars = envVars
-	data.Suffix = types.StringValue(endpoint.Suffix)
-	data.URL = types.StringValue(endpoint.URL)
+	data.Suffix = types.StringValue(deployment.Suffix)
+	data.URL = types.StringValue(deployment.URL)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data EndpointResourceModel
+func (r *DeploymentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data DeploymentResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -251,7 +272,7 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	endpoint := &Endpoint{
+	deployment := &Deployment{
 		ID:                data.ID.ValueString(),
 		Name:              data.Name.ValueString(),
 		ProjectID:         data.ProjectID.ValueString(),
@@ -264,30 +285,30 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		EnvVars:           envVars,
 	}
 
-	_, err = r.client.UpdateEndpoint(data.Suffix.ValueString(), endpoint)
+	_, err = r.client.UpdateDeployment(data.Suffix.ValueString(), deployment)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update endpoint, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update deployment, got error: %s", err))
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data EndpointResourceModel
+func (r *DeploymentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data DeploymentResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	err := r.client.DeleteEndpoint(data.Suffix.ValueString())
+	err := r.client.DeleteDeployment(data.Suffix.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete endpoint, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete deployment, got error: %s", err))
 		return
 	}
 }
 
-func (r *EndpointResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *DeploymentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

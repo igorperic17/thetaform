@@ -50,7 +50,7 @@ func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureReq
 	}
 
 	client := NewClient(config.Email, config.Password)
-	if client.authToken == "" {
+	if client == nil || client.authToken == "" {
 		resp.Diagnostics.AddError("Authentication Error", "Failed to authenticate with the Theta API")
 		return
 	}
@@ -61,7 +61,7 @@ func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureReq
 
 func (p *ThetaProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewEndpoint,
+		NewDeployment,
 	}
 }
 

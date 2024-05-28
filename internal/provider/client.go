@@ -5,123 +5,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
-const loginURL = "https://api.thetaedgecloud.com/user/login?expand=redirect_project_id.org_id"
-const baseURL = "https://controller.thetaedgecloud.com"
-
 type Client struct {
-	httpClient        *http.Client
-	email             string
-	password          string
-	authToken         string
-	redirectProjectID string
-	userID            string
-	orgID             string
+	baseURL    string
+	authToken  string
+	userID     string
+	httpClient *http.Client
 }
 
-func NewClient(email, password string) *Client {
-	client := &Client{
-		httpClient: &http.Client{},
-		email:      email,
-		password:   password,
-	}
-	err := client.authenticate()
-	if err != nil {
-		fmt.Printf("Error authenticating: %s\n", err)
-	}
-	return client
+type Project struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
-func (c *Client) authenticate() error {
-	payload := map[string]string{
-		"email":    c.email,
-		"password": c.password,
-	}
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", loginURL, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("authentication failed: %s", body)
-	}
-
-	var authResponse struct {
-		Status string `json:"status"`
-		Body   struct {
-			Users []struct {
-				ID                string `json:"id"`
-				AuthToken         string `json:"auth_token"`
-				RedirectProjectID string `json:"redirect_project_id"`
-			} `json:"users"`
-			Projects []struct {
-				ID    string `json:"id"`
-				OrgID string `json:"org_id"`
-			} `json:"projects"`
-		} `json:"body"`
-	}
-	if err := json.Unmarshal(body, &authResponse); err != nil {
-		return err
-	}
-
-	if authResponse.Status != "success" {
-		return fmt.Errorf("authentication failed: %s", body)
-	}
-
-	c.authToken = authResponse.Body.Users[0].AuthToken
-	c.redirectProjectID = authResponse.Body.Users[0].RedirectProjectID
-	c.userID = authResponse.Body.Users[0].ID
-	c.orgID = authResponse.Body.Projects[0].OrgID
-
-	return nil
-}
-
-func (c *Client) doRequest(req *http.Request) ([]byte, error) {
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
-	req.Header.Set("X-Auth-Id", c.userID)
-	req.Header.Set("X-Auth-Token", c.authToken)
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API request error: %s", body)
-	}
-
-	return body, nil
-}
-
-type Endpoint struct {
+type Deployment struct {
 	ID                string            `json:"id"`
 	Name              string            `json:"name"`
 	ProjectID         string            `json:"project_id"`
@@ -136,183 +37,327 @@ type Endpoint struct {
 	URL               string            `json:"url"`
 }
 
-func (c *Client) CreateEndpoint(endpoint *Endpoint) (*Endpoint, error) {
-	url := fmt.Sprintf("%s/deployment", baseURL)
-	jsonBody, err := json.Marshal(endpoint)
+func NewClient(email, password string) *Client {
+	client := &Client{
+		baseURL:    "https://controller.thetaedgecloud.com",
+		httpClient: &http.Client{},
+	}
+
+	authToken, userID, err := client.authenticate(email, password)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Printf("Received response: %s", string(body))
-
-	var createdEndpoint struct {
-		Status string `json:"status"`
-		Body   string `json:"body"`
-	}
-	if err := json.Unmarshal(body, &createdEndpoint); err != nil {
-		log.Printf("Error unmarshalling response: %v", err)
-		return nil, err
-	}
-
-	if createdEndpoint.Status != "success" {
-		return nil, fmt.Errorf("create failed: %s", body)
-	}
-
-	// Extract the URL from the response body
-	urlParts := strings.Split(createdEndpoint.Body, " ")
-	if len(urlParts) < 7 {
-		return nil, fmt.Errorf("unexpected response format: %s", createdEndpoint.Body)
-	}
-	endpoint.URL = strings.TrimSpace(urlParts[6])
-
-	// Extract the suffix from the URL
-	urlSuffixParts := strings.Split(endpoint.URL, "-")
-	if len(urlSuffixParts) < 2 {
-		return nil, fmt.Errorf("unexpected URL format: %s", endpoint.URL)
-	}
-	endpoint.Suffix = urlSuffixParts[1]
-
-	// Poll the URL until it becomes available
-	for i := 0; i < 60; i++ { // 10 minutes
-		time.Sleep(10 * time.Second)
-		resp, err := http.Get(endpoint.URL)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			break
-		}
-	}
-
-	return endpoint, nil
+	client.authToken = authToken
+	client.userID = userID
+	return client
 }
 
-func (c *Client) GetEndpoint(id string) (*Endpoint, error) {
-	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", baseURL, id, c.redirectProjectID)
+func (c *Client) authenticate(email, password string) (string, string, error) {
+	url := "https://api.thetaedgecloud.com/user/login?expand=redirect_project_id.org_id"
+	payload := map[string]string{"email": email, "password": password}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", "", err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Platform", "web")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("authentication failed: %s", resp.Status)
+	}
+
+	var respData struct {
+		Status string `json:"status"`
+		Body   struct {
+			Users []struct {
+				AuthToken string `json:"auth_token"`
+				ID        string `json:"id"`
+			} `json:"users"`
+		} `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		return "", "", err
+	}
+
+	if len(respData.Body.Users) == 0 {
+		return "", "", fmt.Errorf("authentication failed: no users found")
+	}
+
+	return respData.Body.Users[0].AuthToken, respData.Body.Users[0].ID, nil
+}
+
+func (c *Client) CreateProject(project *Project) (*Project, error) {
+	url := fmt.Sprintf("%s/project", c.baseURL)
+	body, err := json.Marshal(project)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request error: %s", resp.Status)
+	}
+
+	var respData struct {
+		Status string  `json:"status"`
+		Body   Project `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		return nil, err
+	}
+
+	return &respData.Body, nil
+}
+
+func (c *Client) GetProject(id string) (*Project, error) {
+	url := fmt.Sprintf("%s/project/%s", c.baseURL, id)
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
 
-	log.Printf("Making GET request to URL: %s", url)
-
-	body, err := c.doRequest(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		log.Printf("Error making request: %v", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request error: %s", resp.Status)
+	}
+
+	var respData struct {
+		Status string  `json:"status"`
+		Body   Project `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
 		return nil, err
 	}
 
-	log.Printf("Received response: %s", string(body))
-
-	var endpoint struct {
-		Status string `json:"status"`
-		Body   struct {
-			ID                string            `json:"ID"`
-			Name              string            `json:"Name"`
-			ProjectID         string            `json:"ProjectID"`
-			DeploymentImageID string            `json:"ImageURL"`
-			ContainerImage    string            `json:"ImageURL"`
-			MinReplicas       int               `json:"Replicas"`
-			MaxReplicas       int               `json:"Replicas"`
-			VMID              string            `json:"MachineType"`
-			Annotations       map[string]string `json:"Annotations"`
-			EnvVars           map[string]string `json:"EnvVars"`
-			Suffix            string            `json:"Suffix"`
-		} `json:"body"`
-	}
-	if err := json.Unmarshal(body, &endpoint); err != nil {
-		log.Printf("Error unmarshalling response: %v", err)
-		return nil, err
-	}
-
-	if endpoint.Status != "success" {
-		log.Printf("GET request failed: %s", string(body))
-		return nil, fmt.Errorf("get failed: %s", body)
-	}
-
-	return &Endpoint{
-		ID:                endpoint.Body.ID,
-		Name:              endpoint.Body.Name,
-		ProjectID:         endpoint.Body.ProjectID,
-		DeploymentImageID: endpoint.Body.DeploymentImageID,
-		ContainerImage:    endpoint.Body.ContainerImage,
-		MinReplicas:       endpoint.Body.MinReplicas,
-		MaxReplicas:       endpoint.Body.MaxReplicas,
-		VMID:              endpoint.Body.VMID,
-		Annotations:       endpoint.Body.Annotations,
-		EnvVars:           endpoint.Body.EnvVars,
-		Suffix:            endpoint.Body.Suffix,
-	}, nil
+	return &respData.Body, nil
 }
 
-func (c *Client) UpdateEndpoint(id string, endpoint *Endpoint) (*Endpoint, error) {
-	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", baseURL, id, c.redirectProjectID)
-	jsonBody, err := json.Marshal(endpoint)
+func (c *Client) UpdateProject(id string, project *Project) (*Project, error) {
+	url := fmt.Sprintf("%s/project/%s", c.baseURL, id)
+	body, err := json.Marshal(project)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
 
-	body, err := c.doRequest(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
-	var updatedEndpoint Endpoint
-	if err := json.Unmarshal(body, &updatedEndpoint); err != nil {
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request error: %s", resp.Status)
+	}
+
+	var respData struct {
+		Status string  `json:"status"`
+		Body   Project `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
 		return nil, err
 	}
 
-	return &updatedEndpoint, nil
+	return &respData.Body, nil
 }
 
-func (c *Client) DeleteEndpoint(id string) error {
-	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", baseURL, id, c.redirectProjectID)
+func (c *Client) DeleteProject(id string) error {
+	url := fmt.Sprintf("%s/project/%s", c.baseURL, id)
+
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return err
 	}
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
 
-	log.Printf("Making DELETE request to URL: %s", url)
-
-	body, err := c.doRequest(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		log.Printf("Error making request: %v", err)
 		return err
 	}
+	defer resp.Body.Close()
 
-	log.Printf("Received response: %s", string(body))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API request error: %s", resp.Status)
+	}
 
-	var deleteResponse struct {
+	return nil
+}
+
+func (c *Client) CreateDeployment(deployment *Deployment) (*Deployment, error) {
+	url := fmt.Sprintf("%s/deployment", c.baseURL)
+	body, err := json.Marshal(deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
+
+	fmt.Printf("Request URL: %s\n", url)
+	fmt.Printf("Request Body: %s\n", body)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := ioutil.ReadAll(resp.Body)
+	fmt.Printf("Response Status: %s\n", resp.Status)
+	fmt.Printf("Response Body: %s\n", respBody)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request error: %s", resp.Status)
+	}
+
+	var respData struct {
 		Status string `json:"status"`
-		Body   struct {
-			VMID      string `json:"vm_id"`
-			ProjectID string `json:"project_id"`
-			OrgID     string `json:"org_id"`
-			Value     int    `json:"value"`
-			Shard     string `json:"shard"`
-			Region    string `json:"region"`
-		} `json:"body"`
+		Body   string `json:"body"`
 	}
-	if err := json.Unmarshal(body, &deleteResponse); err != nil {
-		log.Printf("Error unmarshalling response: %v", err)
-		return err
+	if err := json.Unmarshal(respBody, &respData); err != nil {
+		return nil, err
 	}
 
-	if deleteResponse.Status != "success" {
-		log.Printf("DELETE request failed: %s", string(body))
-		return fmt.Errorf("delete failed: %s", body)
+	suffix := strings.TrimPrefix(respData.Body, "Custom deployment initiated. Access it at: https://")
+	suffix = strings.TrimSuffix(suffix, "\n")
+
+	deployment.Suffix = suffix
+	deployment.URL = "https://" + suffix
+
+	return deployment, nil
+}
+
+func (c *Client) GetDeployment(suffix string) (*Deployment, error) {
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseURL, suffix, "prj_8qf89pmjgdqurbaqfpdu3u854s6p")
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request error: %s", resp.Status)
+	}
+
+	var respData struct {
+		Status string     `json:"status"`
+		Body   Deployment `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		return nil, err
+	}
+
+	return &respData.Body, nil
+}
+
+func (c *Client) UpdateDeployment(suffix string, deployment *Deployment) (*Deployment, error) {
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseURL, suffix, "prj_8qf89pmjgdqurbaqfpdu3u854s6p")
+	body, err := json.Marshal(deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request error: %s", resp.Status)
+	}
+
+	var respData struct {
+		Status string     `json:"status"`
+		Body   Deployment `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		return nil, err
+	}
+
+	return &respData.Body, nil
+}
+
+func (c *Client) DeleteDeployment(suffix string) error {
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseURL, suffix, "prj_8qf89pmjgdqurbaqfpdu3u854s6p")
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API request error: %s", resp.Status)
 	}
 
 	return nil

@@ -6,7 +6,7 @@ terraform {
   }
 }
 
-resource "theta_endpoint" "example" {
+resource "theta_deployment" "example2" {
   name                = "llama38b31eu8r5y5d"
   project_id          = "prj_8qf89pmjgdqurbaqfpdu3u854s6p"
   deployment_image_id = "img_rrdau7uikg8rhurf7cbei8j77nbp"
