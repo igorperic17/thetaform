@@ -8,3 +8,9 @@ variable "password" {
   type        = string
   sensitive   = true
 }
+
+variable "hf_token" {
+  description = "HugginFace API token"
+  type        = string
+  sensitive   = true
+}

@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"strings"
+	"time"
 )
 
 const loginURL = "https://api.thetaedgecloud.com/user/login?expand=redirect_project_id.org_id"
@@ -129,6 +132,8 @@ type Endpoint struct {
 	VMID              string            `json:"vm_id"`
 	Annotations       map[string]string `json:"annotations"`
 	EnvVars           map[string]string `json:"env_vars"`
+	Suffix            string            `json:"suffix"`
+	URL               string            `json:"url"`
 }
 
 func (c *Client) CreateEndpoint(endpoint *Endpoint) (*Endpoint, error) {
@@ -148,36 +153,107 @@ func (c *Client) CreateEndpoint(endpoint *Endpoint) (*Endpoint, error) {
 		return nil, err
 	}
 
-	var createdEndpoint Endpoint
+	log.Printf("Received response: %s", string(body))
+
+	var createdEndpoint struct {
+		Status string `json:"status"`
+		Body   string `json:"body"`
+	}
 	if err := json.Unmarshal(body, &createdEndpoint); err != nil {
+		log.Printf("Error unmarshalling response: %v", err)
 		return nil, err
 	}
 
-	return &createdEndpoint, nil
+	if createdEndpoint.Status != "success" {
+		return nil, fmt.Errorf("create failed: %s", body)
+	}
+
+	// Extract the URL from the response body
+	urlParts := strings.Split(createdEndpoint.Body, " ")
+	if len(urlParts) < 7 {
+		return nil, fmt.Errorf("unexpected response format: %s", createdEndpoint.Body)
+	}
+	endpoint.URL = strings.TrimSpace(urlParts[6])
+
+	// Extract the suffix from the URL
+	urlSuffixParts := strings.Split(endpoint.URL, "-")
+	if len(urlSuffixParts) < 2 {
+		return nil, fmt.Errorf("unexpected URL format: %s", endpoint.URL)
+	}
+	endpoint.Suffix = urlSuffixParts[1]
+
+	// Poll the URL until it becomes available
+	for i := 0; i < 60; i++ { // 10 minutes
+		time.Sleep(10 * time.Second)
+		resp, err := http.Get(endpoint.URL)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+	}
+
+	return endpoint, nil
 }
 
 func (c *Client) GetEndpoint(id string) (*Endpoint, error) {
-	url := fmt.Sprintf("%s/deployment/%s", baseURL, id)
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", baseURL, id, c.redirectProjectID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Printf("Making GET request to URL: %s", url)
+
 	body, err := c.doRequest(req)
 	if err != nil {
+		log.Printf("Error making request: %v", err)
 		return nil, err
 	}
 
-	var endpoint Endpoint
+	log.Printf("Received response: %s", string(body))
+
+	var endpoint struct {
+		Status string `json:"status"`
+		Body   struct {
+			ID                string            `json:"ID"`
+			Name              string            `json:"Name"`
+			ProjectID         string            `json:"ProjectID"`
+			DeploymentImageID string            `json:"ImageURL"`
+			ContainerImage    string            `json:"ImageURL"`
+			MinReplicas       int               `json:"Replicas"`
+			MaxReplicas       int               `json:"Replicas"`
+			VMID              string            `json:"MachineType"`
+			Annotations       map[string]string `json:"Annotations"`
+			EnvVars           map[string]string `json:"EnvVars"`
+			Suffix            string            `json:"Suffix"`
+		} `json:"body"`
+	}
 	if err := json.Unmarshal(body, &endpoint); err != nil {
+		log.Printf("Error unmarshalling response: %v", err)
 		return nil, err
 	}
 
-	return &endpoint, nil
+	if endpoint.Status != "success" {
+		log.Printf("GET request failed: %s", string(body))
+		return nil, fmt.Errorf("get failed: %s", body)
+	}
+
+	return &Endpoint{
+		ID:                endpoint.Body.ID,
+		Name:              endpoint.Body.Name,
+		ProjectID:         endpoint.Body.ProjectID,
+		DeploymentImageID: endpoint.Body.DeploymentImageID,
+		ContainerImage:    endpoint.Body.ContainerImage,
+		MinReplicas:       endpoint.Body.MinReplicas,
+		MaxReplicas:       endpoint.Body.MaxReplicas,
+		VMID:              endpoint.Body.VMID,
+		Annotations:       endpoint.Body.Annotations,
+		EnvVars:           endpoint.Body.EnvVars,
+		Suffix:            endpoint.Body.Suffix,
+	}, nil
 }
 
 func (c *Client) UpdateEndpoint(id string, endpoint *Endpoint) (*Endpoint, error) {
-	url := fmt.Sprintf("%s/deployment/%s", baseURL, id)
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", baseURL, id, c.redirectProjectID)
 	jsonBody, err := json.Marshal(endpoint)
 	if err != nil {
 		return nil, err
@@ -202,12 +278,42 @@ func (c *Client) UpdateEndpoint(id string, endpoint *Endpoint) (*Endpoint, error
 }
 
 func (c *Client) DeleteEndpoint(id string) error {
-	url := fmt.Sprintf("%s/deployment/%s", baseURL, id)
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", baseURL, id, c.redirectProjectID)
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.doRequest(req)
-	return err
+	log.Printf("Making DELETE request to URL: %s", url)
+
+	body, err := c.doRequest(req)
+	if err != nil {
+		log.Printf("Error making request: %v", err)
+		return err
+	}
+
+	log.Printf("Received response: %s", string(body))
+
+	var deleteResponse struct {
+		Status string `json:"status"`
+		Body   struct {
+			VMID      string `json:"vm_id"`
+			ProjectID string `json:"project_id"`
+			OrgID     string `json:"org_id"`
+			Value     int    `json:"value"`
+			Shard     string `json:"shard"`
+			Region    string `json:"region"`
+		} `json:"body"`
+	}
+	if err := json.Unmarshal(body, &deleteResponse); err != nil {
+		log.Printf("Error unmarshalling response: %v", err)
+		return err
+	}
+
+	if deleteResponse.Status != "success" {
+		log.Printf("DELETE request failed: %s", string(body))
+		return fmt.Errorf("delete failed: %s", body)
+	}
+
+	return nil
 }

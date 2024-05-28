@@ -18,6 +18,6 @@ resource "theta_endpoint" "example" {
     tags = "[\"LLM\",\"API\"]"
   }
   env_vars = {
-    HUGGING_FACE_HUB_TOKEN = "12345"
+    HUGGING_FACE_HUB_TOKEN = var.hf_token
   }
 }
