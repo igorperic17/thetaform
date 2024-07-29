@@ -8,8 +8,22 @@ import (
 	"time"
 )
 
+type DeploymentTemplateRequest struct {
+	Name           string            `json:"name" tfsdk:"name"`
+	ProjectID      string            `json:"project_id" tfsdk:"project_id"`
+	Description    string            `json:"description" tfsdk:"description"`
+	ContainerImage string            `json:"container_image" tfsdk:"container_image"`
+	ContainerPort  int64             `json:"container_port" tfsdk:"container_port"`
+	ContainerArgs  string            `json:"container_args" tfsdk:"container_args"`
+	EnvVars        map[string]string `json:"env_vars" tfsdk:"env_vars"`
+	Tags           []string          `json:"tags" tfsdk:"tags"`
+	IconURL        string            `json:"icon_url" tfsdk:"icon_url"`
+	Rank           int64             `json:"rank,omitempty" tfsdk:"rank"`
+	RequireEnvVars bool              `json:"require_env_vars,omitempty" tfsdk:"require_env_vars"`
+}
+
 type DeploymentTemplate struct {
-	ID             string            `json:"id"`
+	ID             string            `json:"id" tfsdk:"id"`
 	Name           string            `json:"name"`
 	Description    string            `json:"description"`
 	Tags           []string          `json:"tags"`
@@ -23,18 +37,6 @@ type DeploymentTemplate struct {
 	Rank           int64             `json:"rank"`
 	IconURL        string            `json:"icon_url"`
 	CreateTime     time.Time         `json:"create_time"`
-}
-
-type DeploymentTemplateRequest struct {
-	Name           string            `json:"name"`
-	ProjectID      string            `json:"project_id"`
-	Description    string            `json:"description"`
-	ContainerImage string            `json:"container_image"`
-	ContainerPort  int64             `json:"container_port"`
-	ContainerArgs  string            `json:"container_args"`
-	EnvVars        map[string]string `json:"env_vars"`
-	Tags           []string          `json:"tags"`
-	IconURL        string            `json:"icon_url"`
 }
 
 type DeploymentTemplateResponse struct {
@@ -65,7 +67,7 @@ type DeleteDeploymentTemplateResponse struct {
 	Body   bool   `json:"body"`
 }
 
-func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequest) (*DeploymentTemplateResponse, error) {
+func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequest) (*DeploymentTemplate, error) {
 	url := "https://controller.thetaedgecloud.com/deployment_template"
 
 	jsonData, err := json.Marshal(template)
@@ -90,15 +92,17 @@ func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequest) (*
 		return nil, fmt.Errorf("API request error: %s", resp.Status)
 	}
 
-	var respData DeploymentTemplateResponse
+	var respData struct {
+		Status string             `json:"status"`
+		Body   DeploymentTemplate `json:"body"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
 		return nil, err
 	}
 
-	return &respData, nil
+	return &respData.Body, nil
 }
-
-func (c *Client) UpdateDeploymentTemplate(templateID string, template DeploymentTemplateRequest) (*DeploymentTemplateResponse, error) {
+func (c *Client) UpdateDeploymentTemplate(templateID string, template DeploymentTemplateRequest) (*DeploymentTemplate, error) {
 	url := fmt.Sprintf("https://controller.thetaedgecloud.com/deployment_template/%s", templateID)
 
 	jsonData, err := json.Marshal(template)
@@ -123,12 +127,15 @@ func (c *Client) UpdateDeploymentTemplate(templateID string, template Deployment
 		return nil, fmt.Errorf("API request error: %s", resp.Status)
 	}
 
-	var respData DeploymentTemplateResponse
+	var respData struct {
+		Status string             `json:"status"`
+		Body   DeploymentTemplate `json:"body"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
 		return nil, err
 	}
 
-	return &respData, nil
+	return &respData.Body, nil
 }
 
 func (c *Client) GetDeploymentTemplates(projectID string, page, number int) ([]DeploymentTemplate, error) {

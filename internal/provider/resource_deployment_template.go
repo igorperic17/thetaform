@@ -6,103 +6,92 @@ import (
 	"log"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-type deploymentTemplateDataSource struct {
+// Resource for deployment templates
+type deploymentTemplateResource struct {
 	client *Client
 }
 
-func DeploymentTemplateDataSource() datasource.DataSource {
-	return &deploymentTemplateDataSource{}
+func DeploymentTemplateResource() resource.Resource {
+	return &deploymentTemplateResource{}
 }
 
-func (d *deploymentTemplateDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = "theta_deployment_templates"
+func (r *deploymentTemplateResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "theta_deployment_template"
 }
 
-func (d *deploymentTemplateDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+func (r *deploymentTemplateResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Data source for fetching Theta deployment templates",
+		MarkdownDescription: "Resource for managing Theta deployment templates",
 		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "The ID of the deployment template",
+				Computed:            true,
+			},
+			"name": schema.StringAttribute{
+				MarkdownDescription: "The name of the deployment template",
+				Required:            true,
+			},
+			"description": schema.StringAttribute{
+				MarkdownDescription: "The description of the deployment template",
+				Optional:            true,
+			},
+			"tags": schema.ListAttribute{
+				ElementType:         types.StringType,
+				MarkdownDescription: "The tags of the deployment template",
+				Optional:            true,
+			},
+			"category": schema.StringAttribute{
+				MarkdownDescription: "The category of the deployment template",
+				Computed:            true,
+			},
 			"project_id": schema.StringAttribute{
 				MarkdownDescription: "The ID of the project",
 				Required:            true,
 			},
-			"deployment_templates": schema.ListNestedAttribute{
-				MarkdownDescription: "List of deployment templates",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"id": schema.StringAttribute{
-							MarkdownDescription: "The ID of the deployment template",
-							Computed:            true,
-						},
-						"name": schema.StringAttribute{
-							MarkdownDescription: "The name of the deployment template",
-							Computed:            true,
-						},
-						"description": schema.StringAttribute{
-							MarkdownDescription: "The description of the deployment template",
-							Computed:            true,
-						},
-						"tags": schema.ListAttribute{
-							ElementType:         types.StringType,
-							MarkdownDescription: "The tags of the deployment template",
-							Computed:            true,
-						},
-						"category": schema.StringAttribute{
-							MarkdownDescription: "The category of the deployment template",
-							Computed:            true,
-						},
-						"project_id": schema.StringAttribute{
-							MarkdownDescription: "The ID of the project",
-							Computed:            true,
-						},
-						"container_image": schema.StringAttribute{
-							MarkdownDescription: "The container image of the deployment template",
-							Computed:            true,
-						},
-						"container_port": schema.Int64Attribute{
-							MarkdownDescription: "The container port of the deployment template",
-							Computed:            true,
-						},
-						"container_args": schema.StringAttribute{
-							MarkdownDescription: "The container arguments of the deployment template",
-							Computed:            true,
-						},
-						"env_vars": schema.MapAttribute{
-							ElementType:         types.StringType,
-							MarkdownDescription: "The environment variables of the deployment template",
-							Computed:            true,
-						},
-						"require_env_vars": schema.BoolAttribute{
-							MarkdownDescription: "Whether the deployment template requires environment variables",
-							Computed:            true,
-						},
-						"rank": schema.Int64Attribute{
-							MarkdownDescription: "The rank of the deployment template",
-							Computed:            true,
-						},
-						"icon_url": schema.StringAttribute{
-							MarkdownDescription: "The icon URL of the deployment template",
-							Computed:            true,
-						},
-						"create_time": schema.StringAttribute{
-							MarkdownDescription: "The creation time of the deployment template",
-							Computed:            true,
-						},
-					},
-				},
-				Computed: true,
+			"container_image": schema.StringAttribute{
+				MarkdownDescription: "The container image of the deployment template",
+				Required:            true,
+			},
+			"container_port": schema.Int64Attribute{
+				MarkdownDescription: "The container port of the deployment template",
+				Optional:            true,
+			},
+			"container_args": schema.StringAttribute{
+				MarkdownDescription: "The container arguments of the deployment template",
+				Optional:            true,
+			},
+			"env_vars": schema.MapAttribute{
+				ElementType:         types.StringType,
+				MarkdownDescription: "The environment variables of the deployment template",
+				Optional:            true,
+			},
+			"require_env_vars": schema.BoolAttribute{
+				MarkdownDescription: "Whether the deployment template requires environment variables",
+				Optional:            true,
+			},
+			"rank": schema.Int64Attribute{
+				MarkdownDescription: "The rank of the deployment template",
+				Optional:            true,
+			},
+			"icon_url": schema.StringAttribute{
+				MarkdownDescription: "The icon URL of the deployment template",
+				Optional:            true,
+			},
+			"create_time": schema.StringAttribute{
+				MarkdownDescription: "The creation time of the deployment template",
+				Computed:            true,
 			},
 		},
 	}
 }
 
-func (d *deploymentTemplateDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	log.Println("Data source Configure method called")
+func (r *deploymentTemplateResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	log.Println("Resource Configure method called")
 
 	if req.ProviderData == nil {
 		log.Println("Provider data is nil")
@@ -111,101 +100,149 @@ func (d *deploymentTemplateDataSource) Configure(ctx context.Context, req dataso
 
 	client, ok := req.ProviderData.(*Client)
 	if !ok {
-		resp.Diagnostics.AddError("Unexpected Data Source Configure Type", "Expected *Client")
-		log.Println("Unexpected Data Source Configure Type")
+		resp.Diagnostics.AddError("Unexpected Resource Configure Type", "Expected *Client")
+		log.Println("Unexpected Resource Configure Type")
 		return
 	}
 
-	d.client = client
-	log.Println("Client configured in data source")
+	r.client = client
+	log.Println("Client configured in resource")
 }
 
-func (d *deploymentTemplateDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	if d.client == nil {
-		resp.Diagnostics.AddError("Client Error", "The client is not configured")
-		log.Println("Client is not configured in Read method")
+func (r *deploymentTemplateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan DeploymentTemplateRequest
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	template, err := r.client.CreateDeploymentTemplate(plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating deployment template",
+			"Could not create deployment template, unexpected error: "+err.Error(),
+		)
 		return
 	}
 
 	var state struct {
-		ProjectID           types.String `tfsdk:"project_id"`
-		DeploymentTemplates []struct {
-			ID             types.String            `tfsdk:"id"`
-			Name           types.String            `tfsdk:"name"`
-			Description    types.String            `tfsdk:"description"`
-			Tags           []types.String          `tfsdk:"tags"`
-			Category       types.String            `tfsdk:"category"`
-			ProjectID      types.String            `tfsdk:"project_id"`
-			ContainerImage types.String            `tfsdk:"container_image"`
-			ContainerPort  types.Int64             `tfsdk:"container_port"`
-			ContainerArgs  types.String            `tfsdk:"container_args"`
-			EnvVars        map[string]types.String `tfsdk:"env_vars"`
-			RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
-			Rank           types.Int64             `tfsdk:"rank"`
-			IconURL        types.String            `tfsdk:"icon_url"`
-			CreateTime     types.String            `tfsdk:"create_time"`
-		} `tfsdk:"deployment_templates"`
+		ID             types.String            `tfsdk:"id"`
+		Name           types.String            `tfsdk:"name"`
+		Description    types.String            `tfsdk:"description"`
+		Tags           []types.String          `tfsdk:"tags"`
+		Category       types.String            `tfsdk:"category"`
+		ProjectID      types.String            `tfsdk:"project_id"`
+		ContainerImage types.String            `tfsdk:"container_image"`
+		ContainerPort  types.Int64             `tfsdk:"container_port"`
+		ContainerArgs  types.String            `tfsdk:"container_args"`
+		EnvVars        map[string]types.String `tfsdk:"env_vars"`
+		RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
+		Rank           types.Int64             `tfsdk:"rank"`
+		IconURL        types.String            `tfsdk:"icon_url"`
+		CreateTime     types.String            `tfsdk:"create_time"`
 	}
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
+	state.ID = types.StringValue(template.ID)
+	state.Name = types.StringValue(template.Name)
+	state.Description = types.StringValue(template.Description)
+	state.Tags = convertToTypesStringSlice(template.Tags)
+	state.Category = types.StringValue(template.Category)
+	state.ProjectID = types.StringValue(template.ProjectID)
+	state.ContainerImage = types.StringValue(template.ContainerImage)
+	state.ContainerPort = types.Int64Value(template.ContainerPort)
+	state.ContainerArgs = types.StringValue(template.ContainerArgs)
+	state.EnvVars = convertToTypesStringMap(template.EnvVars)
+	state.RequireEnvVars = types.BoolValue(template.RequireEnvVars)
+	state.Rank = types.Int64Value(template.Rank)
+	state.IconURL = types.StringValue(template.IconURL)
+	state.CreateTime = types.StringValue(template.CreateTime.Format(time.RFC3339))
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+func convertToTypesStringSlice(input []string) []types.String {
+	result := make([]types.String, len(input))
+	for i, v := range input {
+		result[i] = types.StringValue(v)
+	}
+	return result
+}
+
+func convertToTypesStringMap(input map[string]string) map[string]types.String {
+	result := make(map[string]types.String)
+	for k, v := range input {
+		result[k] = types.StringValue(v)
+	}
+	return result
+}
+
+func (r *deploymentTemplateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state struct {
+		ID        types.String `tfsdk:"id"`
+		ProjectID types.String `tfsdk:"project_id"`
+	}
+
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
-		log.Println("Error getting config:", resp.Diagnostics)
 		return
 	}
 
-	projectID := state.ProjectID.ValueString()
-
-	templates, err := d.client.GetDeploymentTemplates(projectID, 0, 100)
+	template, err := r.client.GetDeploymentTemplateByID(state.ProjectID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read deployment templates, got error: %s", err))
-		log.Println("Unable to read deployment templates, got error:", err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read deployment template, got error: %s", err))
 		return
 	}
 
-	for _, template := range templates {
-		envVars := make(map[string]types.String)
-		for k, v := range template.EnvVars {
-			envVars[k] = types.StringValue(v)
-		}
+	resp.Diagnostics.Append(resp.State.Set(ctx, template)...)
+}
 
-		tags := make([]types.String, len(template.Tags))
-		for i, tag := range template.Tags {
-			tags[i] = types.StringValue(tag)
-		}
-
-		state.DeploymentTemplates = append(state.DeploymentTemplates, struct {
-			ID             types.String            `tfsdk:"id"`
-			Name           types.String            `tfsdk:"name"`
-			Description    types.String            `tfsdk:"description"`
-			Tags           []types.String          `tfsdk:"tags"`
-			Category       types.String            `tfsdk:"category"`
-			ProjectID      types.String            `tfsdk:"project_id"`
-			ContainerImage types.String            `tfsdk:"container_image"`
-			ContainerPort  types.Int64             `tfsdk:"container_port"`
-			ContainerArgs  types.String            `tfsdk:"container_args"`
-			EnvVars        map[string]types.String `tfsdk:"env_vars"`
-			RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
-			Rank           types.Int64             `tfsdk:"rank"`
-			IconURL        types.String            `tfsdk:"icon_url"`
-			CreateTime     types.String            `tfsdk:"create_time"`
-		}{
-			ID:             types.StringValue(template.ID),
-			Name:           types.StringValue(template.Name),
-			Description:    types.StringValue(template.Description),
-			Tags:           tags,
-			Category:       types.StringValue(template.Category),
-			ProjectID:      types.StringValue(template.ProjectID),
-			ContainerImage: types.StringValue(template.ContainerImage),
-			ContainerPort:  types.Int64Value(template.ContainerPort),
-			ContainerArgs:  types.StringValue(template.ContainerArgs),
-			EnvVars:        envVars,
-			RequireEnvVars: types.BoolValue(template.RequireEnvVars),
-			Rank:           types.Int64Value(template.Rank),
-			IconURL:        types.StringValue(template.IconURL),
-			CreateTime:     types.StringValue(template.CreateTime.Format(time.RFC3339)),
-		})
+func (r *deploymentTemplateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan DeploymentTemplateRequest
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	diags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+	var state struct {
+		ID        types.String `tfsdk:"id"`
+		ProjectID types.String `tfsdk:"project_id"`
+	}
+
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	template, err := r.client.UpdateDeploymentTemplate(state.ID.ValueString(), plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update deployment template, got error: %s", err))
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, template)...)
+}
+
+func (r *deploymentTemplateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state struct {
+		ID        types.String `tfsdk:"id"`
+		ProjectID types.String `tfsdk:"project_id"`
+	}
+
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	success, err := r.client.DeleteDeploymentTemplate(state.ID.ValueString(), state.ProjectID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete deployment template, got error: %s", err))
+		return
+	}
+
+	if !success {
+		resp.Diagnostics.AddError("Client Error", "Failed to delete deployment template")
+		return
+	}
+
+	resp.State.RemoveResource(ctx)
 }
