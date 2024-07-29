@@ -72,7 +72,7 @@ func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureReq
 func (p *ThetaProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewDeployment,
-		NewDeploymentTemplateResource,
+		// NewDeploymentTemplateResource,
 	}
 }
 
@@ -80,5 +80,6 @@ func (p *ThetaProvider) DataSources(ctx context.Context) []func() datasource.Dat
 	return []func() datasource.DataSource{
 		OrganizationDataSource,
 		ProjectDataSource,
+		DeploymentTemplateDataSource,
 	}
 }
