@@ -65,6 +65,7 @@ func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureReq
 	log.Println("Client successfully created with authToken:", client.authToken)
 	p.client = client
 
+	resp.ResourceData = client
 	resp.DataSourceData = client
 }
 
@@ -78,5 +79,6 @@ func (p *ThetaProvider) Resources(ctx context.Context) []func() resource.Resourc
 func (p *ThetaProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		OrganizationDataSource,
+		ProjectDataSource,
 	}
 }

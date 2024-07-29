@@ -16,7 +16,7 @@ type Project struct {
 	CreateTime    string   `json:"create_time"`
 	UserJoinTime  string   `json:"user_join_time"`
 	UserIDs       []string `json:"user_ids"`
-	UserRole      string   `json:"usre_role"`
+	UserRole      string   `json:"user_role"`
 	TvaSecret     string   `json:"tva_secret"`
 	GatewayKey    *string  `json:"gateway_key"`
 	GatewaySecret *string  `json:"gateway_secret"`
@@ -86,8 +86,8 @@ func (c *Client) CreateProject(project *Project) (*Project, error) {
 	return &respData.Body, nil
 }
 
-func (c *Client) GetProjects() (*[]Project, error) {
-	url := fmt.Sprintf("https://api.thetaedgecloud.com/user/%s/organization/%s/projects?expand=user_ids", c.userID, c.orgID)
+func (c *Client) GetProjects(orgID string) (*[]Project, error) {
+	url := fmt.Sprintf("https://api.thetaedgecloud.com/user/%s/organization/%s/projects?expand=user_ids", c.userID, orgID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -114,8 +114,7 @@ func (c *Client) GetProjects() (*[]Project, error) {
 	return &respData.Body.Projects, nil
 }
 
-func (c *Client) UpdateProject(id string, project *Project) (*[]Project, error) {
-	// https://api.thetaedgecloud.com/project/prj_pmwrtfx5183vi8agc63vgcxiwvej
+func (c *Client) UpdateProject(id string, project *Project) (*Project, error) {
 	url := fmt.Sprintf("https://api.thetaedgecloud.com/project/%s", id)
 	body, err := json.Marshal(project)
 	if err != nil {
@@ -140,36 +139,36 @@ func (c *Client) UpdateProject(id string, project *Project) (*[]Project, error) 
 		return nil, fmt.Errorf("API request error: %s", resp.Status)
 	}
 
-	var respData APIResponse
+	var respData struct {
+		Status string  `json:"status"`
+		Body   Project `json:"body"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
 		return nil, err
 	}
 
-	return &respData.Body.Projects, nil
+	return &respData.Body, nil
 }
 
 func (c *Client) DeleteProject(id string) error {
-	// not implemented (waiting for the API)
+	url := fmt.Sprintf("https://api.thetaedgecloud.com/project/%s", id)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Auth-Token", c.authToken)
+	req.Header.Set("X-Auth-Id", c.userID)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API request error: %s", resp.Status)
+	}
+
 	return nil
-
-	// url := fmt.Sprintf("https://api.thetaedgecloud.com/project/%s", id)
-
-	// req, err := http.NewRequest("DELETE", url, nil)
-	// if err != nil {
-	// 	return err
-	// }
-	// req.Header.Set("X-Auth-Token", c.authToken)
-	// req.Header.Set("X-Auth-Id", c.userID)
-
-	// resp, err := c.httpClient.Do(req)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer resp.Body.Close()
-
-	// if resp.StatusCode != http.StatusOK {
-	// 	return fmt.Errorf("API request error: %s", resp.Status)
-	// }
-
-	// return nil
 }
