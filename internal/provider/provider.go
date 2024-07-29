@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -39,6 +40,8 @@ func (p *ThetaProvider) Schema(ctx context.Context, req provider.SchemaRequest, 
 }
 
 func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	log.Println("Configure method called")
+
 	var config struct {
 		Email    string `tfsdk:"email"`
 		Password string `tfsdk:"password"`
@@ -46,25 +49,34 @@ func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureReq
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
+		log.Println("Error getting config:", resp.Diagnostics)
 		return
 	}
+
+	log.Println("Config Email:", config.Email)
 
 	client := NewClient(config.Email, config.Password)
 	if client == nil || client.authToken == "" {
 		resp.Diagnostics.AddError("Authentication Error", "Failed to authenticate with the Theta API")
+		log.Println("Failed to authenticate with the Theta API")
 		return
 	}
+
+	log.Println("Client successfully created with authToken:", client.authToken)
 	p.client = client
 
-	resp.ResourceData = client
+	resp.DataSourceData = client
 }
 
 func (p *ThetaProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewDeployment,
+		NewDeploymentTemplateResource,
 	}
 }
 
 func (p *ThetaProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		OrganizationDataSource,
+	}
 }

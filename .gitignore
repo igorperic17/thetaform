@@ -24,3 +24,5 @@ go.work
 local.tfvars
 *.tfstate
 *.tfstate.backup
+
+examples.go

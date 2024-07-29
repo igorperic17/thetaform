@@ -32,6 +32,71 @@ var (
 )
 
 func main() {
+
+	// var client = provider.NewClient("igorperic+theta2@live.com", "theta1231")
+
+	// organisations, err := client.GetOrganizations()
+	// if err != nil {
+	// 	println(err.Error())
+	// 	return
+	// }
+	// project := organisations[0]
+	// println(project.Name)
+
+	// newProject := provider.Project{
+	// 	Name: "my_cool_new_project",
+	// }
+
+	// projectResponse, err := client.CreateProject(&newProject)
+	// if err != nil {
+	// 	println(err.Error())
+	// }
+
+	// println(projectResponse.Name)
+
+	// project := provider.Project{ID: "prj_2tcq81a5wyk3637caigcn9ytrz2s"}
+
+	// templateReq := provider.DeploymentTemplateRequest{
+	// 	Name:           "asdf2123",
+	// 	ProjectID:      project.ID,
+	// 	Description:    "",
+	// 	ContainerImage: "vllm/vllm-openai",
+	// 	Tags:           []string{"LLM", "API"}, // TODO: convert this into enums of allowed tags
+	// 	ContainerPort:  "8000",
+	// 	ContainerArgs:  "",
+	// 	EnvVars:        nil,
+	// }
+
+	// template, err := client.CreateDeploymentTemplate(templateReq)
+	// if err != nil {
+	// 	println(err.Error())
+	// 	return
+	// } else {
+	// 	println("Created template")
+	// 	println(template.ID)
+	// }
+
+	// templates, _ := client.GetDeploymentTemplates("prj_2tcq81a5wyk3637caigcn9ytrz2s", 0, 8)
+	// println(templates[0].Name)
+
+	// template, err := client.DeleteDeploymentTemplate("img_6xtzvg40d7cmbnpu1u13u58m6fn11", project.ID)
+	// if err != nil {
+	// 	println(err.Error())
+	// 	return
+	// } else {
+	// 	println("Deleted template")
+	// 	println(template)
+	// }
+
+	// newTemplate, err := client.GetDeployment(template.ID)
+	// if err != nil {
+	// 	println(err.Error())
+	// 	return
+	// } else {
+	// 	println("Created template")
+	// 	println(newTemplate)
+	// }
+
 	var debug bool
 
 	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with support for debuggers like delve")
