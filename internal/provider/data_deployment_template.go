@@ -61,7 +61,7 @@ func (d *deploymentTemplateDataSource) Schema(ctx context.Context, req datasourc
 							MarkdownDescription: "The ID of the project",
 							Computed:            true,
 						},
-						"container_image": schema.ListAttribute{
+						"container_images": schema.ListAttribute{
 							ElementType:         types.StringType,
 							MarkdownDescription: "The container image of the deployment template",
 							Computed:            true,
@@ -70,7 +70,8 @@ func (d *deploymentTemplateDataSource) Schema(ctx context.Context, req datasourc
 							MarkdownDescription: "The container port of the deployment template",
 							Computed:            true,
 						},
-						"container_args": schema.StringAttribute{
+						"container_args": schema.ListAttribute{
+							ElementType:         types.StringType,
 							MarkdownDescription: "The container arguments of the deployment template",
 							Computed:            true,
 						},
@@ -132,20 +133,20 @@ func (d *deploymentTemplateDataSource) Read(ctx context.Context, req datasource.
 	var state struct {
 		ProjectID           types.String `tfsdk:"project_id"`
 		DeploymentTemplates []struct {
-			ID             types.String            `tfsdk:"id"`
-			Name           types.String            `tfsdk:"name"`
-			Description    types.String            `tfsdk:"description"`
-			Tags           []types.String          `tfsdk:"tags"`
-			Category       types.String            `tfsdk:"category"`
-			ProjectID      types.String            `tfsdk:"project_id"`
-			ContainerImage []types.String          `tfsdk:"container_image"`
-			ContainerPort  types.Int64             `tfsdk:"container_port"`
-			ContainerArgs  types.String            `tfsdk:"container_args"`
-			EnvVars        map[string]types.String `tfsdk:"env_vars"`
-			RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
-			Rank           types.Int64             `tfsdk:"rank"`
-			IconURL        types.String            `tfsdk:"icon_url"`
-			CreateTime     types.String            `tfsdk:"create_time"`
+			ID              types.String            `tfsdk:"id"`
+			Name            types.String            `tfsdk:"name"`
+			Description     types.String            `tfsdk:"description"`
+			Tags            []types.String          `tfsdk:"tags"`
+			Category        types.String            `tfsdk:"category"`
+			ProjectID       types.String            `tfsdk:"project_id"`
+			ContainerImages []types.String          `tfsdk:"container_images"`
+			ContainerPort   types.Int64             `tfsdk:"container_port"`
+			ContainerArgs   []types.String          `tfsdk:"container_args"`
+			EnvVars         map[string]types.String `tfsdk:"env_vars"`
+			RequireEnvVars  types.Bool              `tfsdk:"require_env_vars"`
+			Rank            types.Int64             `tfsdk:"rank"`
+			IconURL         types.String            `tfsdk:"icon_url"`
+			CreateTime      types.String            `tfsdk:"create_time"`
 		} `tfsdk:"deployment_templates"`
 	}
 
@@ -175,41 +176,60 @@ func (d *deploymentTemplateDataSource) Read(ctx context.Context, req datasource.
 			tags[i] = types.StringValue(tag)
 		}
 
-		containerImages := make([]types.String, len(template.ContainerImage))
-		for i, img := range template.ContainerImage {
+		containerImages := make([]types.String, len(template.ContainerImages))
+		for i, img := range template.ContainerImages {
 			containerImages[i] = types.StringValue(img)
 		}
 
+		containerArgs := make([]types.String, len(template.ContainerArgs))
+		for i, arg := range template.ContainerArgs {
+			containerArgs[i] = types.StringValue(arg)
+		}
+
+		var requireEnvVars types.Bool
+		if template.RequireEnvVars != nil {
+			requireEnvVars = types.BoolValue(*template.RequireEnvVars)
+		} else {
+			requireEnvVars = types.BoolNull()
+		}
+
+		var rank types.Int64
+		if template.Rank != nil {
+			rank = types.Int64Value(*template.Rank)
+		} else {
+			rank = types.Int64Null()
+		}
+
 		state.DeploymentTemplates = append(state.DeploymentTemplates, struct {
-			ID             types.String            `tfsdk:"id"`
-			Name           types.String            `tfsdk:"name"`
-			Description    types.String            `tfsdk:"description"`
-			Tags           []types.String          `tfsdk:"tags"`
-			Category       types.String            `tfsdk:"category"`
-			ProjectID      types.String            `tfsdk:"project_id"`
-			ContainerImage []types.String          `tfsdk:"container_image"`
-			ContainerPort  types.Int64             `tfsdk:"container_port"`
-			ContainerArgs  types.String            `tfsdk:"container_args"`
-			EnvVars        map[string]types.String `tfsdk:"env_vars"`
-			RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
-			Rank           types.Int64             `tfsdk:"rank"`
-			IconURL        types.String            `tfsdk:"icon_url"`
-			CreateTime     types.String            `tfsdk:"create_time"`
+			ID              types.String            `tfsdk:"id"`
+			Name            types.String            `tfsdk:"name"`
+			Description     types.String            `tfsdk:"description"`
+			Tags            []types.String          `tfsdk:"tags"`
+			Category        types.String            `tfsdk:"category"`
+			ProjectID       types.String            `tfsdk:"project_id"`
+			ContainerImages []types.String          `tfsdk:"container_images"`
+			ContainerPort   types.Int64             `tfsdk:"container_port"`
+			ContainerArgs   []types.String          `tfsdk:"container_args"`
+			EnvVars         map[string]types.String `tfsdk:"env_vars"`
+			RequireEnvVars  types.Bool              `tfsdk:"require_env_vars"`
+			Rank            types.Int64             `tfsdk:"rank"`
+			IconURL         types.String            `tfsdk:"icon_url"`
+			CreateTime      types.String            `tfsdk:"create_time"`
 		}{
-			ID:             types.StringValue(template.ID),
-			Name:           types.StringValue(template.Name),
-			Description:    types.StringValue(template.Description),
-			Tags:           tags,
-			Category:       types.StringValue(template.Category),
-			ProjectID:      types.StringValue(template.ProjectID),
-			ContainerImage: containerImages,
-			ContainerPort:  types.Int64Value(template.ContainerPort),
-			ContainerArgs:  types.StringValue(template.ContainerArgs),
-			EnvVars:        envVars,
-			RequireEnvVars: types.BoolValue(template.RequireEnvVars),
-			Rank:           types.Int64Value(template.Rank),
-			IconURL:        types.StringValue(template.IconURL),
-			CreateTime:     types.StringValue(template.CreateTime.Format(time.RFC3339)),
+			ID:              types.StringValue(template.ID),
+			Name:            types.StringValue(template.Name),
+			Description:     types.StringValue(template.Description),
+			Tags:            tags,
+			Category:        types.StringValue(template.Category),
+			ProjectID:       types.StringValue(template.ProjectID),
+			ContainerImages: containerImages,
+			ContainerPort:   types.Int64Value(template.ContainerPort),
+			ContainerArgs:   containerArgs,
+			EnvVars:         envVars,
+			RequireEnvVars:  requireEnvVars,
+			Rank:            rank,
+			IconURL:         types.StringValue(template.IconURL),
+			CreateTime:      types.StringValue(template.CreateTime.Format(time.RFC3339)),
 		})
 	}
 

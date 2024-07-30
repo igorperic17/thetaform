@@ -25,8 +25,9 @@ resource "theta_deployment_template" "my_first_tf_managed_template" {
   name            = "stable-diffusion-service"
   project_id      = data.theta_projects.projects.projects[0].id
   description     = "Image generation service "
-  container_image = ["thetalabsorg/sketch_to_3d:v0.0.1"]
+  container_images = ["thetalabsorg/sketch_to_3d:v0.0.1"]
   container_port  = 7860
+  container_args  = []
   env_vars = {
     HUGGING_FACE_HUB_TOKEN = "hf_xxx"
   }
@@ -34,26 +35,11 @@ resource "theta_deployment_template" "my_first_tf_managed_template" {
   icon_url = ""
 }
 
-# output "deployment_template_id" {
-#   value = theta_deployment_template.my_first_tf_managed_template.id
-# }
+output "deployment_template_id" {
+  value = theta_deployment_template.my_first_tf_managed_template.id
+}
 
 # Fetch the list of deployment templates for the first project
 data "theta_deployment_templates" "templates" {
   project_id = data.theta_projects.projects.projects[0].id
-}
-
-# Output the fetched organizations
-output "organizations" {
-  value = data.theta_organizations.org_list.organizations
-}
-
-# Output the fetched projects
-output "projects" {
-  value = data.theta_projects.projects.projects
-}
-
-# Output the fetched deployment templates
-output "deployment_templates" {
-  value = data.theta_deployment_templates.templates
 }

@@ -1,30 +1,28 @@
 package provider
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
 type DeploymentTemplateRequest struct {
-	ID             basetypes.StringValue `json:"id,omitempty" tfsdk:"id"`
-	Name           string                `json:"name" tfsdk:"name"`
-	ProjectID      string                `json:"project_id" tfsdk:"project_id"`
-	Description    basetypes.StringValue `json:"description,omitempty" tfsdk:"description"`
-	ContainerImage []string              `json:"container_image" tfsdk:"container_image"`
-	ContainerPort  basetypes.Int64Value  `json:"container_port,omitempty" tfsdk:"container_port"`
-	ContainerArgs  basetypes.StringValue `json:"container_args,omitempty" tfsdk:"container_args"`
-	EnvVars        map[string]string     `json:"env_vars,omitempty" tfsdk:"env_vars"`
-	Tags           []string              `json:"tags,omitempty" tfsdk:"tags"`
-	IconURL        basetypes.StringValue `json:"icon_url,omitempty" tfsdk:"icon_url"`
-	RequireEnvVars *bool                 `json:"require_env_vars,omitempty" tfsdk:"require_env_vars"`
-	Rank           *int64                `json:"rank,omitempty" tfsdk:"rank"`
-	CreateTime     basetypes.StringValue `json:"create_time,omitempty" tfsdk:"create_time"`
-	Category       basetypes.StringValue `json:"category,omitempty" tfsdk:"category"`
+	ID              basetypes.StringValue `json:"id,omitempty" tfsdk:"id"`
+	Name            string                `json:"name" tfsdk:"name"`
+	ProjectID       string                `json:"project_id" tfsdk:"project_id"`
+	Description     basetypes.StringValue `json:"description,omitempty" tfsdk:"description"`
+	ContainerImages []string              `json:"container_images" tfsdk:"container_images"`
+	ContainerPort   basetypes.Int64Value  `json:"container_port,omitempty" tfsdk:"container_port"`
+	ContainerArgs   []string              `json:"container_args,omitempty" tfsdk:"container_args"`
+	EnvVars         map[string]string     `json:"env_vars,omitempty" tfsdk:"env_vars"`
+	Tags            []string              `json:"tags,omitempty" tfsdk:"tags"`
+	IconURL         basetypes.StringValue `json:"icon_url,omitempty" tfsdk:"icon_url"`
+	RequireEnvVars  basetypes.BoolValue   `json:"require_env_vars,omitempty" tfsdk:"require_env_vars"`
+	Rank            basetypes.Int64Value  `json:"rank,omitempty" tfsdk:"rank"`
+	CreateTime      basetypes.StringValue `json:"create_time,omitempty" tfsdk:"create_time"`
+	Category        basetypes.StringValue `json:"category,omitempty" tfsdk:"category"`
 }
 
 type DeploymentTemplateRequestNative struct {
@@ -33,29 +31,29 @@ type DeploymentTemplateRequestNative struct {
 	Description    string            `json:"description,omitempty"`
 	ContainerImage []string          `json:"container_image"`
 	ContainerPort  int64             `json:"container_port,omitempty"`
-	ContainerArgs  string            `json:"container_args,omitempty"`
+	ContainerArgs  []string          `json:"container_args,omitempty"`
 	EnvVars        map[string]string `json:"env_vars,omitempty"`
 	Tags           []string          `json:"tags,omitempty"`
 	IconURL        string            `json:"icon_url,omitempty"`
-	RequireEnvVars bool              `json:"require_env_vars,omitempty"`
-	Rank           int64             `json:"rank,omitempty"`
+	RequireEnvVars *bool             `json:"require_env_vars,omitempty"`
+	Rank           *int64            `json:"rank,omitempty"`
 }
 
 type DeploymentTemplate struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	Description    string            `json:"description"`
-	Tags           []string          `json:"tags"`
-	Category       string            `json:"category"`
-	ProjectID      string            `json:"project_id"`
-	ContainerImage []string          `json:"container_image"`
-	ContainerPort  int64             `json:"container_port"`
-	ContainerArgs  string            `json:"container_args"`
-	EnvVars        map[string]string `json:"env_vars"`
-	RequireEnvVars bool              `json:"require_env_vars"`
-	Rank           int64             `json:"rank"`
-	IconURL        string            `json:"icon_url"`
-	CreateTime     time.Time         `json:"create_time"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Description     string            `json:"description"`
+	Tags            []string          `json:"tags"`
+	Category        string            `json:"category"`
+	ProjectID       string            `json:"project_id"`
+	ContainerImages []string          `json:"container_images"`
+	ContainerPort   int64             `json:"container_port"`
+	ContainerArgs   []string          `json:"container_args"`
+	EnvVars         map[string]string `json:"env_vars"`
+	RequireEnvVars  *bool             `json:"require_env_vars"`
+	Rank            *int64            `json:"rank"`
+	IconURL         string            `json:"icon_url"`
+	CreateTime      time.Time         `json:"create_time"`
 }
 
 type CreateDeploymentTemplateResponse struct {
@@ -81,29 +79,17 @@ func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequestNati
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	body, err := sendRequest(c, "POST", url, jsonData)
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	setCommonHeaders(req, c)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s. Request: %s, %s", resp.Status, url, template)
 	}
 
 	var respData struct {
 		Status string             `json:"status"`
 		Body   DeploymentTemplate `json:"body"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return nil, fmt.Errorf("error decoding response: %v", err)
 	}
 
 	return &respData.Body, nil
@@ -117,29 +103,21 @@ func (c *Client) UpdateDeploymentTemplate(templateID string, template Deployment
 		return nil, err
 	}
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
+	body, err := sendRequest(c, "PUT", url, jsonData)
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	setCommonHeaders(req, c)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s", resp.Status)
 	}
 
 	var respData struct {
 		Status string             `json:"status"`
 		Body   DeploymentTemplate `json:"body"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return nil, fmt.Errorf("error decoding response: %v", err)
+	}
+
+	if respData.Status != "success" {
+		return nil, fmt.Errorf("API response error: %s", respData.Status)
 	}
 
 	return &respData.Body, nil
@@ -148,22 +126,9 @@ func (c *Client) UpdateDeploymentTemplate(templateID string, template Deployment
 func (c *Client) GetDeploymentTemplates(projectID string, page, number int) ([]DeploymentTemplate, error) {
 	url := fmt.Sprintf("https://controller.thetaedgecloud.com/deployment_template/list_custom_templates?project_id=%s&page=%d&number=%d", projectID, page, number)
 
-	req, err := http.NewRequest("GET", url, nil)
+	body, err := sendRequest(c, "GET", url, nil)
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Auth-Token", c.authToken)
-	req.Header.Set("X-Auth-Id", c.userID)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s", resp.Status)
 	}
 
 	var respData struct {
@@ -175,7 +140,7 @@ func (c *Client) GetDeploymentTemplates(projectID string, page, number int) ([]D
 			Number     int                  `json:"number"`
 		} `json:"body"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+	if err := json.Unmarshal(body, &respData); err != nil {
 		return nil, err
 	}
 
@@ -204,25 +169,13 @@ func (c *Client) GetDeploymentTemplateByID(projectID, templateID string) (*Deplo
 func (c *Client) DeleteDeploymentTemplate(templateID, projectID string) (bool, error) {
 	url := fmt.Sprintf("https://controller.thetaedgecloud.com/deployment_template/%s?project_id=%s", templateID, projectID)
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	body, err := sendRequest(c, "DELETE", url, nil)
 	if err != nil {
 		return false, err
-	}
-	req.Header.Set("X-Auth-Token", c.authToken)
-	req.Header.Set("X-Auth-Id", c.userID)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("API request error: %s", resp.Status)
 	}
 
 	var respData DeleteDeploymentTemplateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+	if err := json.Unmarshal(body, &respData); err != nil {
 		return false, err
 	}
 
@@ -231,23 +184,4 @@ func (c *Client) DeleteDeploymentTemplate(templateID, projectID string) (bool, e
 	}
 
 	return respData.Body, nil
-}
-
-func setCommonHeaders(req *http.Request, c *Client) {
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br, zstd")
-	req.Header.Set("Accept-Language", "en-GB,en;q=0.8")
-	req.Header.Set("Origin", "https://www.thetaedgecloud.com")
-	req.Header.Set("Referer", "https://www.thetaedgecloud.com/")
-	req.Header.Set("Sec-Ch-Ua", "\"Brave\";v=\"123\", \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"123\"")
-	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
-	req.Header.Set("Sec-Ch-Ua-Platform", "\"macOS\"")
-	req.Header.Set("Sec-Fetch-Dest", "empty")
-	req.Header.Set("Sec-Fetch-Mode", "cors")
-	req.Header.Set("Sec-Fetch-Site", "same-site")
-	req.Header.Set("Sec-Gpc", "1")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
-	req.Header.Set("X-Auth-Id", c.userID)
-	req.Header.Set("X-Auth-Token", c.authToken)
-	req.Header.Set("X-Platform", "web")
 }
