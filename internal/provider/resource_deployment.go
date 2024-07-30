@@ -218,20 +218,19 @@ func convertDeploymentToNativePlan(plan DeploymentCreateRequest) DeploymentCreat
 		URL:               plan.URL.ValueString(),
 	}
 }
-
 func convertToDeploymentTerraformState(deployment *Deployment) DeploymentTerraformState {
 	return DeploymentTerraformState{
-		ID:                types.StringValue(deployment.ID),
+		ID:                types.StringValue(deployment.Suffix), // Use Suffix as ID
 		Name:              types.StringValue(deployment.Name),
 		ProjectID:         types.StringValue(deployment.ProjectID),
-		DeploymentImageID: types.StringValue(deployment.DeploymentImageID),
-		ContainerImage:    types.StringValue(deployment.ContainerImage),
-		MinReplicas:       types.Int64Value(deployment.MinReplicas),
-		MaxReplicas:       types.Int64Value(deployment.MaxReplicas),
-		VMID:              types.StringValue(deployment.VMID),
+		DeploymentImageID: types.StringNull(), // Not used, so set to null
+		ContainerImage:    types.StringValue(deployment.ImageURL),
+		MinReplicas:       types.Int64Value(1), // Assuming default value for MinReplicas
+		MaxReplicas:       types.Int64Value(deployment.Replicas),
+		VMID:              types.StringValue(deployment.MachineType),
 		Annotations:       convertToTypesStringMap(deployment.Annotations),
 		AuthUsername:      types.StringValue(deployment.AuthUsername),
 		AuthPassword:      types.StringValue(deployment.AuthPassword),
-		URL:               types.StringValue(deployment.URL),
+		URL:               types.StringValue(deployment.Endpoint),
 	}
 }

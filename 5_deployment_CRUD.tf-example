@@ -22,22 +22,22 @@ data "theta_projects" "projects" {
 
 # Create a deployment template
 resource "theta_deployment_template" "my_first_tf_managed_template" {
-  name              = "stable-diffusion-service"
+  name              = "gemma2template"
   project_id        = data.theta_projects.projects.projects[0].id
-  description       = "Image generation service"
-  container_images  = ["goolashe/comfy-sd-webui:latest"]
-  container_port    = 7860
+  description       = "Gemma2 template deployed on Theta Cloud"
+  container_images  = ["vllm/vllm-openai"]
+  container_port    = 8000
   container_args    = []
   env_vars = {
-    HUGGING_FACE_HUB_TOKEN = "hf_xxx"
+    HUGGING_FACE_HUB_TOKEN = var.hf_token
   }
-  tags         = ["ImageGen", "CodeGen"]
+  tags         = ["LLM", "CodeGen", "API"]
   icon_url     = ""
 }
 
 # Create a deployment using the deployment template created above
 resource "theta_deployment" "my_deployment" {
-  name                = "thetaformd1233"
+  name                = "gemma2deployment"
   project_id          = data.theta_projects.projects.projects[0].id
   deployment_image_id = theta_deployment_template.my_first_tf_managed_template.id
   container_image    = theta_deployment_template.my_first_tf_managed_template.container_images[0]
@@ -46,7 +46,7 @@ resource "theta_deployment" "my_deployment" {
   vm_id              = "vm_c1"  # Replace with an actual VM ID if needed
   annotations        = {
     tags     = "[\"ImageGen\",\"CodeGen\"]"
-    nickname = "dep_name"
+    nickname = ""
   }
   auth_username      = "my_user"
   auth_password      = "my_hackathon_winning_password"
