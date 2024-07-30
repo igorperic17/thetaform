@@ -1,0 +1,50 @@
+name: Thetaform Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: string
+      action:
+        description: 'Action to perform (apply or destroy)'
+        required: true
+        default: 'apply'
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.1
+
+      - name: Terraform Init
+        run: terraform init
+        env:
+          TF_VAR_email: ${{ secrets.DEPLOYMENT_EMAIL }}
+          TF_VAR_password: ${{ secrets.DEPLOYMENT_PASSWORD }}
+
+      - name: Terraform Plan
+        run: terraform plan
+        env:
+          TF_VAR_email: ${{ secrets.DEPLOYMENT_EMAIL }}
+          TF_VAR_password: ${{ secrets.DEPLOYMENT_PASSWORD }}
+
+      - name: Terraform Apply or Destroy
+        run: |
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            terraform destroy -auto-approve
+          else
+            terraform apply -auto-approve
+          fi
+        env:
+          TF_VAR_email: ${{ secrets.DEPLOYMENT_EMAIL }}
+          TF_VAR_password: ${{ secrets.DEPLOYMENT_PASSWORD }}

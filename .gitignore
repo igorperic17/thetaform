@@ -26,3 +26,5 @@ local.tfvars
 *.tfstate.backup
 
 examples.go
+
+.DS_Store
