@@ -144,10 +144,7 @@ func (r *deploymentTemplateResource) Create(ctx context.Context, req resource.Cr
 }
 
 func (r *deploymentTemplateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state struct {
-		ID        types.String `tfsdk:"id"`
-		ProjectID types.String `tfsdk:"project_id"`
-	}
+	var state TFDeploymentTemplateStateStruct
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -171,10 +168,7 @@ func (r *deploymentTemplateResource) Update(ctx context.Context, req resource.Up
 		return
 	}
 
-	var state struct {
-		ID        types.String `tfsdk:"id"`
-		ProjectID types.String `tfsdk:"project_id"`
-	}
+	var state TFDeploymentTemplateStateStruct
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -194,10 +188,7 @@ func (r *deploymentTemplateResource) Update(ctx context.Context, req resource.Up
 }
 
 func (r *deploymentTemplateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state struct {
-		ID        types.String `tfsdk:"id"`
-		ProjectID types.String `tfsdk:"project_id"`
-	}
+	var state TFDeploymentTemplateStateStruct
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -246,6 +237,23 @@ func convertToNativePlan(plan DeploymentTemplateRequest) DeploymentTemplateReque
 	}
 }
 
+type TFDeploymentTemplateStateStruct = struct {
+	ID              types.String            `tfsdk:"id"`
+	Name            types.String            `tfsdk:"name"`
+	Description     types.String            `tfsdk:"description"`
+	Tags            []types.String          `tfsdk:"tags"`
+	Category        types.String            `tfsdk:"category"`
+	ProjectID       types.String            `tfsdk:"project_id"`
+	ContainerImages []types.String          `tfsdk:"container_images"`
+	ContainerPort   types.Int64             `tfsdk:"container_port"`
+	ContainerArgs   []types.String          `tfsdk:"container_args"`
+	EnvVars         map[string]types.String `tfsdk:"env_vars"`
+	RequireEnvVars  types.Bool              `tfsdk:"require_env_vars"`
+	Rank            types.Int64             `tfsdk:"rank"`
+	IconURL         types.String            `tfsdk:"icon_url"`
+	CreateTime      types.String            `tfsdk:"create_time"`
+}
+
 func convertToTerraformState(template *DeploymentTemplate) struct {
 	ID              types.String            `tfsdk:"id"`
 	Name            types.String            `tfsdk:"name"`
@@ -262,22 +270,7 @@ func convertToTerraformState(template *DeploymentTemplate) struct {
 	IconURL         types.String            `tfsdk:"icon_url"`
 	CreateTime      types.String            `tfsdk:"create_time"`
 } {
-	return struct {
-		ID              types.String            `tfsdk:"id"`
-		Name            types.String            `tfsdk:"name"`
-		Description     types.String            `tfsdk:"description"`
-		Tags            []types.String          `tfsdk:"tags"`
-		Category        types.String            `tfsdk:"category"`
-		ProjectID       types.String            `tfsdk:"project_id"`
-		ContainerImages []types.String          `tfsdk:"container_images"`
-		ContainerPort   types.Int64             `tfsdk:"container_port"`
-		ContainerArgs   []types.String          `tfsdk:"container_args"`
-		EnvVars         map[string]types.String `tfsdk:"env_vars"`
-		RequireEnvVars  types.Bool              `tfsdk:"require_env_vars"`
-		Rank            types.Int64             `tfsdk:"rank"`
-		IconURL         types.String            `tfsdk:"icon_url"`
-		CreateTime      types.String            `tfsdk:"create_time"`
-	}{
+	return TFDeploymentTemplateStateStruct{
 		ID:              types.StringValue(template.ID),
 		Name:            types.StringValue(template.Name),
 		Description:     types.StringValue(template.Description),

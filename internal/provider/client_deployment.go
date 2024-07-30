@@ -1,164 +1,205 @@
 package provider
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"regexp"
 	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+type DeploymentCreateRequest struct {
+	ID                types.String            `tfsdk:"id"`
+	Name              types.String            `tfsdk:"name"`
+	ProjectID         types.String            `tfsdk:"project_id"`
+	DeploymentImageID types.String            `tfsdk:"deployment_image_id"`
+	ContainerImage    types.String            `tfsdk:"container_image"`
+	MinReplicas       types.Int64             `tfsdk:"min_replicas"`
+	MaxReplicas       types.Int64             `tfsdk:"max_replicas"`
+	VMID              types.String            `tfsdk:"vm_id"`
+	Annotations       map[string]types.String `tfsdk:"annotations"`
+	AuthUsername      types.String            `tfsdk:"auth_username"`
+	AuthPassword      types.String            `tfsdk:"auth_password"`
+	URL               types.String            `tfsdk:"deployment_url"`
+}
+
+type DeploymentCreateRequestNative struct {
+	Name              string            `json:"name"`
+	ProjectID         string            `json:"project_id"`
+	DeploymentImageID string            `json:"deployment_image_id"`
+	ContainerImage    string            `json:"container_image"`
+	MinReplicas       int64             `json:"min_replicas"`
+	MaxReplicas       int64             `json:"max_replicas"`
+	VMID              string            `json:"vm_id"`
+	Annotations       map[string]string `json:"annotations"` // Ensure correct format
+	AuthUsername      string            `json:"auth_username"`
+	AuthPassword      string            `json:"auth_password"`
+	URL               string            `json:"deployment_url"`
+}
+
+// Deployment represents the structure of a deployment response.
 type Deployment struct {
 	ID                string            `json:"id"`
 	Name              string            `json:"name"`
 	ProjectID         string            `json:"project_id"`
 	DeploymentImageID string            `json:"deployment_image_id"`
 	ContainerImage    string            `json:"container_image"`
-	MinReplicas       int               `json:"min_replicas"`
-	MaxReplicas       int               `json:"max_replicas"`
+	MinReplicas       int64             `json:"min_replicas"`
+	MaxReplicas       int64             `json:"max_replicas"`
 	VMID              string            `json:"vm_id"`
 	Annotations       map[string]string `json:"annotations"`
-	EnvVars           map[string]string `json:"env_vars"`
-	Suffix            string            `json:"suffix"`
-	URL               string            `json:"url"`
+	AuthUsername      string            `json:"auth_username"`
+	AuthPassword      string            `json:"auth_password"`
+	ContainerPort     int64             `json:"container_port"`
+	URL               string            `json:"deployment_url"`
 }
 
-func (c *Client) CreateDeployment(deployment *Deployment) (*Deployment, error) {
-	url := fmt.Sprintf("%s/deployment", c.baseURL)
-	body, err := json.Marshal(deployment)
+func (c *Client) CreateDeployment(req DeploymentCreateRequestNative) (*Deployment, error) {
+	url := fmt.Sprintf("%s/deployment", c.baseControllerURL)
+
+	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	respBody, err := sendRequest(c, "POST", url, body)
 	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Auth-Token", c.authToken)
-	req.Header.Set("X-Auth-Id", c.userID)
-
-	fmt.Printf("Request URL: %s\n", url)
-	fmt.Printf("Request Body: %s\n", body)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := ioutil.ReadAll(resp.Body)
-	fmt.Printf("Response Status: %s\n", resp.Status)
-	fmt.Printf("Response Body: %s\n", respBody)
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s", resp.Status)
+		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	var respData struct {
+	var result struct {
 		Status string `json:"status"`
 		Body   string `json:"body"`
 	}
-	if err := json.Unmarshal(respBody, &respData); err != nil {
-		return nil, err
+
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	suffix := strings.TrimPrefix(respData.Body, "Custom deployment initiated. Access it at: https://")
-	suffix = strings.TrimSuffix(suffix, "\n")
+	if result.Status != "success" {
+		return nil, fmt.Errorf("API returned an error: %s", result.Body)
+	}
 
-	deployment.Suffix = suffix
-	deployment.URL = "https://" + suffix
+	// Extract URL from the body string
+	deploymentURL := extractDeploymentURL(result.Body)
 
-	return deployment, nil
+	// Extract ID from the URL
+	deploymentID, err := extractDeploymentID(deploymentURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract deployment ID: %v", err)
+	}
+
+	// Return the deployment with the ID and URL set
+	return &Deployment{
+		ID:                deploymentID,
+		Name:              req.Name,
+		ProjectID:         req.ProjectID,
+		DeploymentImageID: req.DeploymentImageID,
+		ContainerImage:    req.ContainerImage,
+		MinReplicas:       req.MinReplicas,
+		MaxReplicas:       req.MaxReplicas,
+		VMID:              req.VMID,
+		Annotations:       req.Annotations,
+		AuthUsername:      req.AuthUsername,
+		AuthPassword:      req.AuthPassword,
+		URL:               deploymentURL,
+	}, nil
 }
 
-func (c *Client) GetDeployment(suffix string) (*Deployment, error) {
-	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseURL, suffix, "prj_8qf89pmjgdqurbaqfpdu3u854s6p")
+func extractDeploymentURL(body string) string {
+	// Extract the URL from the response body string
+	// Assuming the URL is at the end of the string
+	// This is a simple example, adapt as needed
+	matches := regexp.MustCompile(`https://[^\s]+`).FindString(body)
+	return matches
+}
 
-	req, err := http.NewRequest("GET", url, nil)
+func extractDeploymentID(url string) (string, error) {
+	// URL format is {name}-{id}.{rest_of_theta_domain}
+	parts := strings.Split(url, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unexpected URL format")
+	}
+
+	// Extract the part before the first dot
+	beforeDot := parts[0]
+
+	// Extract the ID from the part before the dot
+	parts = strings.Split(beforeDot, "-")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unexpected URL format for ID extraction")
+	}
+
+	// The ID is the part after the name
+	return parts[len(parts)-1], nil
+}
+
+func (c *Client) GetDeploymentByID(id string) (*Deployment, error) {
+	url := fmt.Sprintf("%s/deployment/%s", c.baseControllerURL, id)
+
+	// Send the request using the utility function
+	respBody, err := sendRequest(c, "GET", url, nil)
 	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("X-Auth-Token", c.authToken)
-	req.Header.Set("X-Auth-Id", c.userID)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s", resp.Status)
+		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	var respData struct {
+	var result struct {
 		Status string     `json:"status"`
 		Body   Deployment `json:"body"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
-		return nil, err
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	return &respData.Body, nil
+	if result.Status != "success" {
+		return nil, fmt.Errorf("API returned an error: %s", result.Status)
+	}
+
+	return &result.Body, nil
 }
 
-func (c *Client) UpdateDeployment(suffix string, deployment *Deployment) (*Deployment, error) {
-	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseURL, suffix, "prj_8qf89pmjgdqurbaqfpdu3u854s6p")
-	body, err := json.Marshal(deployment)
+func (c *Client) UpdateDeployment(id string, req DeploymentCreateRequestNative) (*Deployment, error) {
+	url := fmt.Sprintf("%s/deployment/%s", c.baseControllerURL, id)
+
+	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(body))
+	// Send the request using the utility function
+	respBody, err := sendRequest(c, "PUT", url, body)
 	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Auth-Token", c.authToken)
-	req.Header.Set("X-Auth-Id", c.userID)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s", resp.Status)
+		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	var respData struct {
+	var result struct {
 		Status string     `json:"status"`
 		Body   Deployment `json:"body"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
-		return nil, err
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	return &respData.Body, nil
+	if result.Status != "success" {
+		return nil, fmt.Errorf("API returned an error: %s", result.Status)
+	}
+
+	return &result.Body, nil
 }
+func (c *Client) DeleteDeployment(id string) (bool, error) {
+	url := fmt.Sprintf("%s/deployment/%s", c.baseControllerURL, id)
 
-func (c *Client) DeleteDeployment(suffix string) error {
-	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseURL, suffix, "prj_8qf89pmjgdqurbaqfpdu3u854s6p")
-
-	req, err := http.NewRequest("DELETE", url, nil)
+	// Send the request using the utility function
+	respBody, err := sendRequest(c, "DELETE", url, nil)
 	if err != nil {
-		return err
-	}
-	req.Header.Set("X-Auth-Token", c.authToken)
-	req.Header.Set("X-Auth-Id", c.userID)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API request error: %s", resp.Status)
+		return false, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	return nil
+	// Check the response body to determine success
+	if string(respBody) == "" {
+		return true, nil
+	}
+
+	return false, fmt.Errorf("unexpected response body: %s", string(respBody))
 }

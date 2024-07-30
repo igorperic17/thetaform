@@ -26,7 +26,7 @@ resource "theta_deployment_template" "my_first_tf_managed_template" {
   project_id      = data.theta_projects.projects.projects[0].id
   description     = "Image generation service "
   container_images = ["thetalabsorg/sketch_to_3d:v0.0.1"]
-  container_port  = 7860
+  container_port  = 7861
   container_args  = []
   env_vars = {
     HUGGING_FACE_HUB_TOKEN = "hf_xxx"

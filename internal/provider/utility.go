@@ -52,34 +52,42 @@ func readCompressedResponse(resp *http.Response) ([]byte, error) {
 	return body, err
 }
 
-// Utility function to send a request and return the response body
 func sendRequest(c *Client, method, url string, body []byte) ([]byte, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	setCommonHeaders(req, c)
 
+	fmt.Printf("DEBUG: Sending %s request to %s\n", method, url)
+	fmt.Printf("DEBUG: Request body: %s\n", string(body))
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s. Request: %s", resp.Status, url)
+	fmt.Printf("DEBUG: Response status: %s\n", resp.Status)
+	for key, values := range resp.Header {
+		for _, value := range values {
+			fmt.Printf("DEBUG: Header: %s: %s\n", key, value)
+		}
 	}
 
-	body, err = readCompressedResponse(resp)
+	respBody, err := readCompressedResponse(resp)
 	if err != nil {
 		return nil, err
 	}
 
-	// Log the raw response body
-	fmt.Printf("DEBUG: Raw response body: %s\n", string(body))
+	fmt.Printf("DEBUG: Response body: %s\n", string(respBody))
 
-	return body, nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request error: %s. Response body: %s", resp.Status, string(respBody))
+	}
+
+	return respBody, nil
 }
 
 func setCommonHeaders(req *http.Request, c *Client) {
