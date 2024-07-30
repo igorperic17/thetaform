@@ -6,30 +6,49 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
 type DeploymentTemplateRequest struct {
-	Name           string            `json:"name" tfsdk:"name"`
-	ProjectID      string            `json:"project_id" tfsdk:"project_id"`
-	Description    string            `json:"description" tfsdk:"description"`
-	ContainerImage string            `json:"container_image" tfsdk:"container_image"`
-	ContainerPort  int64             `json:"container_port" tfsdk:"container_port"`
-	ContainerArgs  string            `json:"container_args" tfsdk:"container_args"`
-	EnvVars        map[string]string `json:"env_vars" tfsdk:"env_vars"`
-	Tags           []string          `json:"tags" tfsdk:"tags"`
-	IconURL        string            `json:"icon_url" tfsdk:"icon_url"`
-	Rank           int64             `json:"rank,omitempty" tfsdk:"rank"`
-	RequireEnvVars bool              `json:"require_env_vars,omitempty" tfsdk:"require_env_vars"`
+	ID             basetypes.StringValue `json:"id,omitempty" tfsdk:"id"`
+	Name           string                `json:"name" tfsdk:"name"`
+	ProjectID      string                `json:"project_id" tfsdk:"project_id"`
+	Description    basetypes.StringValue `json:"description,omitempty" tfsdk:"description"`
+	ContainerImage []string              `json:"container_image" tfsdk:"container_image"`
+	ContainerPort  basetypes.Int64Value  `json:"container_port,omitempty" tfsdk:"container_port"`
+	ContainerArgs  basetypes.StringValue `json:"container_args,omitempty" tfsdk:"container_args"`
+	EnvVars        map[string]string     `json:"env_vars,omitempty" tfsdk:"env_vars"`
+	Tags           []string              `json:"tags,omitempty" tfsdk:"tags"`
+	IconURL        basetypes.StringValue `json:"icon_url,omitempty" tfsdk:"icon_url"`
+	RequireEnvVars *bool                 `json:"require_env_vars,omitempty" tfsdk:"require_env_vars"`
+	Rank           *int64                `json:"rank,omitempty" tfsdk:"rank"`
+	CreateTime     basetypes.StringValue `json:"create_time,omitempty" tfsdk:"create_time"`
+	Category       basetypes.StringValue `json:"category,omitempty" tfsdk:"category"`
+}
+
+type DeploymentTemplateRequestNative struct {
+	Name           string            `json:"name"`
+	ProjectID      string            `json:"project_id"`
+	Description    string            `json:"description,omitempty"`
+	ContainerImage []string          `json:"container_image"`
+	ContainerPort  int64             `json:"container_port,omitempty"`
+	ContainerArgs  string            `json:"container_args,omitempty"`
+	EnvVars        map[string]string `json:"env_vars,omitempty"`
+	Tags           []string          `json:"tags,omitempty"`
+	IconURL        string            `json:"icon_url,omitempty"`
+	RequireEnvVars bool              `json:"require_env_vars,omitempty"`
+	Rank           int64             `json:"rank,omitempty"`
 }
 
 type DeploymentTemplate struct {
-	ID             string            `json:"id" tfsdk:"id"`
+	ID             string            `json:"id"`
 	Name           string            `json:"name"`
 	Description    string            `json:"description"`
 	Tags           []string          `json:"tags"`
 	Category       string            `json:"category"`
 	ProjectID      string            `json:"project_id"`
-	ContainerImage string            `json:"container_image"`
+	ContainerImage []string          `json:"container_image"`
 	ContainerPort  int64             `json:"container_port"`
 	ContainerArgs  string            `json:"container_args"`
 	EnvVars        map[string]string `json:"env_vars"`
@@ -37,19 +56,6 @@ type DeploymentTemplate struct {
 	Rank           int64             `json:"rank"`
 	IconURL        string            `json:"icon_url"`
 	CreateTime     time.Time         `json:"create_time"`
-}
-
-type DeploymentTemplateResponse struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	ProjectID      string            `json:"project_id"`
-	Description    string            `json:"description"`
-	ContainerImage string            `json:"container_image"`
-	ContainerPort  int64             `json:"container_port"`
-	ContainerArgs  string            `json:"container_args"`
-	EnvVars        map[string]string `json:"env_vars"`
-	Tags           []string          `json:"tags"`
-	IconURL        string            `json:"icon_url"`
 }
 
 type CreateDeploymentTemplateResponse struct {
@@ -67,7 +73,7 @@ type DeleteDeploymentTemplateResponse struct {
 	Body   bool   `json:"body"`
 }
 
-func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequest) (*DeploymentTemplate, error) {
+func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequestNative) (*DeploymentTemplate, error) {
 	url := "https://controller.thetaedgecloud.com/deployment_template"
 
 	jsonData, err := json.Marshal(template)
@@ -89,7 +95,7 @@ func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequest) (*
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request error: %s", resp.Status)
+		return nil, fmt.Errorf("API request error: %s. Request: %s, %s", resp.Status, url, template)
 	}
 
 	var respData struct {
@@ -102,7 +108,8 @@ func (c *Client) CreateDeploymentTemplate(template DeploymentTemplateRequest) (*
 
 	return &respData.Body, nil
 }
-func (c *Client) UpdateDeploymentTemplate(templateID string, template DeploymentTemplateRequest) (*DeploymentTemplate, error) {
+
+func (c *Client) UpdateDeploymentTemplate(templateID string, template DeploymentTemplateRequestNative) (*DeploymentTemplate, error) {
 	url := fmt.Sprintf("https://controller.thetaedgecloud.com/deployment_template/%s", templateID)
 
 	jsonData, err := json.Marshal(template)

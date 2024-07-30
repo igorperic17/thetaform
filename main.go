@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"os"
 	"terraform-provider-theta/internal/provider"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -96,6 +97,12 @@ func main() {
 	// 	println("Created template")
 	// 	println(newTemplate)
 	// }
+
+	// Set log output to standard error for better visibility
+	log.SetOutput(os.Stderr)
+	// Set log level to debug for detailed logging
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetPrefix("DEBUG: ")
 
 	var debug bool
 

@@ -61,7 +61,8 @@ func (d *deploymentTemplateDataSource) Schema(ctx context.Context, req datasourc
 							MarkdownDescription: "The ID of the project",
 							Computed:            true,
 						},
-						"container_image": schema.StringAttribute{
+						"container_image": schema.ListAttribute{
+							ElementType:         types.StringType,
 							MarkdownDescription: "The container image of the deployment template",
 							Computed:            true,
 						},
@@ -137,7 +138,7 @@ func (d *deploymentTemplateDataSource) Read(ctx context.Context, req datasource.
 			Tags           []types.String          `tfsdk:"tags"`
 			Category       types.String            `tfsdk:"category"`
 			ProjectID      types.String            `tfsdk:"project_id"`
-			ContainerImage types.String            `tfsdk:"container_image"`
+			ContainerImage []types.String          `tfsdk:"container_image"`
 			ContainerPort  types.Int64             `tfsdk:"container_port"`
 			ContainerArgs  types.String            `tfsdk:"container_args"`
 			EnvVars        map[string]types.String `tfsdk:"env_vars"`
@@ -174,6 +175,11 @@ func (d *deploymentTemplateDataSource) Read(ctx context.Context, req datasource.
 			tags[i] = types.StringValue(tag)
 		}
 
+		containerImages := make([]types.String, len(template.ContainerImage))
+		for i, img := range template.ContainerImage {
+			containerImages[i] = types.StringValue(img)
+		}
+
 		state.DeploymentTemplates = append(state.DeploymentTemplates, struct {
 			ID             types.String            `tfsdk:"id"`
 			Name           types.String            `tfsdk:"name"`
@@ -181,7 +187,7 @@ func (d *deploymentTemplateDataSource) Read(ctx context.Context, req datasource.
 			Tags           []types.String          `tfsdk:"tags"`
 			Category       types.String            `tfsdk:"category"`
 			ProjectID      types.String            `tfsdk:"project_id"`
-			ContainerImage types.String            `tfsdk:"container_image"`
+			ContainerImage []types.String          `tfsdk:"container_image"`
 			ContainerPort  types.Int64             `tfsdk:"container_port"`
 			ContainerArgs  types.String            `tfsdk:"container_args"`
 			EnvVars        map[string]types.String `tfsdk:"env_vars"`
@@ -196,7 +202,7 @@ func (d *deploymentTemplateDataSource) Read(ctx context.Context, req datasource.
 			Tags:           tags,
 			Category:       types.StringValue(template.Category),
 			ProjectID:      types.StringValue(template.ProjectID),
-			ContainerImage: types.StringValue(template.ContainerImage),
+			ContainerImage: containerImages,
 			ContainerPort:  types.Int64Value(template.ContainerPort),
 			ContainerArgs:  types.StringValue(template.ContainerArgs),
 			EnvVars:        envVars,

@@ -53,7 +53,8 @@ func (r *deploymentTemplateResource) Schema(ctx context.Context, req resource.Sc
 				MarkdownDescription: "The ID of the project",
 				Required:            true,
 			},
-			"container_image": schema.StringAttribute{
+			"container_image": schema.ListAttribute{
+				ElementType:         types.StringType,
 				MarkdownDescription: "The container image of the deployment template",
 				Required:            true,
 			},
@@ -91,32 +92,42 @@ func (r *deploymentTemplateResource) Schema(ctx context.Context, req resource.Sc
 }
 
 func (r *deploymentTemplateResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	log.Println("Resource Configure method called")
+	log.Println("DEBUG: Resource Configure method called")
 
 	if req.ProviderData == nil {
-		log.Println("Provider data is nil")
+		log.Println("DEBUG: Provider data is nil")
 		return
 	}
 
 	client, ok := req.ProviderData.(*Client)
 	if !ok {
 		resp.Diagnostics.AddError("Unexpected Resource Configure Type", "Expected *Client")
-		log.Println("Unexpected Resource Configure Type")
+		log.Println("DEBUG: Unexpected Resource Configure Type")
 		return
 	}
 
 	r.client = client
-	log.Println("Client configured in resource")
+	log.Println("DEBUG: Client configured in resource")
 }
 
 func (r *deploymentTemplateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	log.Println("DEBUG: Entering Create method")
+
+	// Extract the plan
 	var plan DeploymentTemplateRequest
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
+		log.Println("DEBUG: Error getting plan:", resp.Diagnostics)
 		return
 	}
+	log.Printf("DEBUG: Plan received: %+v\n", plan)
 
-	template, err := r.client.CreateDeploymentTemplate(plan)
+	// Convert plan to native request format
+	nativePlan := convertToNativePlan(plan)
+	log.Printf("DEBUG: Native plan: %+v\n", nativePlan)
+
+	// Call the API to create the deployment template
+	template, err := r.client.CreateDeploymentTemplate(nativePlan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating deployment template",
@@ -124,56 +135,11 @@ func (r *deploymentTemplateResource) Create(ctx context.Context, req resource.Cr
 		)
 		return
 	}
+	log.Printf("DEBUG: Template created: %+v\n", template)
 
-	var state struct {
-		ID             types.String            `tfsdk:"id"`
-		Name           types.String            `tfsdk:"name"`
-		Description    types.String            `tfsdk:"description"`
-		Tags           []types.String          `tfsdk:"tags"`
-		Category       types.String            `tfsdk:"category"`
-		ProjectID      types.String            `tfsdk:"project_id"`
-		ContainerImage types.String            `tfsdk:"container_image"`
-		ContainerPort  types.Int64             `tfsdk:"container_port"`
-		ContainerArgs  types.String            `tfsdk:"container_args"`
-		EnvVars        map[string]types.String `tfsdk:"env_vars"`
-		RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
-		Rank           types.Int64             `tfsdk:"rank"`
-		IconURL        types.String            `tfsdk:"icon_url"`
-		CreateTime     types.String            `tfsdk:"create_time"`
-	}
-
-	state.ID = types.StringValue(template.ID)
-	state.Name = types.StringValue(template.Name)
-	state.Description = types.StringValue(template.Description)
-	state.Tags = convertToTypesStringSlice(template.Tags)
-	state.Category = types.StringValue(template.Category)
-	state.ProjectID = types.StringValue(template.ProjectID)
-	state.ContainerImage = types.StringValue(template.ContainerImage)
-	state.ContainerPort = types.Int64Value(template.ContainerPort)
-	state.ContainerArgs = types.StringValue(template.ContainerArgs)
-	state.EnvVars = convertToTypesStringMap(template.EnvVars)
-	state.RequireEnvVars = types.BoolValue(template.RequireEnvVars)
-	state.Rank = types.Int64Value(template.Rank)
-	state.IconURL = types.StringValue(template.IconURL)
-	state.CreateTime = types.StringValue(template.CreateTime.Format(time.RFC3339))
-
+	// Set the state
+	state := convertToTerraformState(template)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-}
-
-func convertToTypesStringSlice(input []string) []types.String {
-	result := make([]types.String, len(input))
-	for i, v := range input {
-		result[i] = types.StringValue(v)
-	}
-	return result
-}
-
-func convertToTypesStringMap(input map[string]string) map[string]types.String {
-	result := make(map[string]types.String)
-	for k, v := range input {
-		result[k] = types.StringValue(v)
-	}
-	return result
 }
 
 func (r *deploymentTemplateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -193,7 +159,8 @@ func (r *deploymentTemplateResource) Read(ctx context.Context, req resource.Read
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, template)...)
+	newState := convertToTerraformState(template)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
 
 func (r *deploymentTemplateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -213,13 +180,15 @@ func (r *deploymentTemplateResource) Update(ctx context.Context, req resource.Up
 		return
 	}
 
-	template, err := r.client.UpdateDeploymentTemplate(state.ID.ValueString(), plan)
+	nativePlan := convertToNativePlan(plan)
+	template, err := r.client.UpdateDeploymentTemplate(state.ID.ValueString(), nativePlan)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update deployment template, got error: %s", err))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, template)...)
+	newState := convertToTerraformState(template)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
 
 func (r *deploymentTemplateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -245,4 +214,90 @@ func (r *deploymentTemplateResource) Delete(ctx context.Context, req resource.De
 	}
 
 	resp.State.RemoveResource(ctx)
+}
+
+func convertToTerraformState(template *DeploymentTemplate) struct {
+	ID             types.String            `tfsdk:"id"`
+	Name           types.String            `tfsdk:"name"`
+	Description    types.String            `tfsdk:"description"`
+	Tags           []types.String          `tfsdk:"tags"`
+	Category       types.String            `tfsdk:"category"`
+	ProjectID      types.String            `tfsdk:"project_id"`
+	ContainerImage []types.String          `tfsdk:"container_image"`
+	ContainerPort  types.Int64             `tfsdk:"container_port"`
+	ContainerArgs  types.String            `tfsdk:"container_args"`
+	EnvVars        map[string]types.String `tfsdk:"env_vars"`
+	RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
+	Rank           types.Int64             `tfsdk:"rank"`
+	IconURL        types.String            `tfsdk:"icon_url"`
+	CreateTime     types.String            `tfsdk:"create_time"`
+} {
+	return struct {
+		ID             types.String            `tfsdk:"id"`
+		Name           types.String            `tfsdk:"name"`
+		Description    types.String            `tfsdk:"description"`
+		Tags           []types.String          `tfsdk:"tags"`
+		Category       types.String            `tfsdk:"category"`
+		ProjectID      types.String            `tfsdk:"project_id"`
+		ContainerImage []types.String          `tfsdk:"container_image"`
+		ContainerPort  types.Int64             `tfsdk:"container_port"`
+		ContainerArgs  types.String            `tfsdk:"container_args"`
+		EnvVars        map[string]types.String `tfsdk:"env_vars"`
+		RequireEnvVars types.Bool              `tfsdk:"require_env_vars"`
+		Rank           types.Int64             `tfsdk:"rank"`
+		IconURL        types.String            `tfsdk:"icon_url"`
+		CreateTime     types.String            `tfsdk:"create_time"`
+	}{
+		ID:             types.StringValue(template.ID),
+		Name:           types.StringValue(template.Name),
+		Description:    types.StringValue(template.Description),
+		Tags:           convertToTypesStringSlice(template.Tags),
+		Category:       types.StringValue(template.Category),
+		ProjectID:      types.StringValue(template.ProjectID),
+		ContainerImage: convertToTypesStringSlice(template.ContainerImage),
+		ContainerPort:  types.Int64Value(template.ContainerPort),
+		ContainerArgs:  types.StringValue(template.ContainerArgs),
+		EnvVars:        convertToTypesStringMap(template.EnvVars),
+		RequireEnvVars: types.BoolValue(template.RequireEnvVars),
+		Rank:           types.Int64Value(template.Rank),
+		IconURL:        types.StringValue(template.IconURL),
+		CreateTime:     types.StringValue(template.CreateTime.Format(time.RFC3339)),
+	}
+}
+
+func convertToTypesStringSlice(input []string) []types.String {
+	result := make([]types.String, len(input))
+	for i, v := range input {
+		result[i] = types.StringValue(v)
+	}
+	return result
+}
+
+func convertToTypesStringMap(input map[string]string) map[string]types.String {
+	result := make(map[string]types.String, len(input))
+	for k, v := range input {
+		result[k] = types.StringValue(v)
+	}
+	return result
+}
+
+func convertToNativePlan(plan DeploymentTemplateRequest) DeploymentTemplateRequestNative {
+	native := DeploymentTemplateRequestNative{
+		Name:           plan.Name,
+		ProjectID:      plan.ProjectID,
+		Description:    plan.Description.ValueString(),
+		ContainerImage: plan.ContainerImage,
+		ContainerPort:  plan.ContainerPort.ValueInt64(),
+		ContainerArgs:  plan.ContainerArgs.ValueString(),
+		EnvVars:        plan.EnvVars,
+		Tags:           plan.Tags,
+		IconURL:        plan.IconURL.ValueString(),
+	}
+	if plan.RequireEnvVars != nil {
+		native.RequireEnvVars = *plan.RequireEnvVars
+	}
+	if plan.Rank != nil {
+		native.Rank = *plan.Rank
+	}
+	return native
 }

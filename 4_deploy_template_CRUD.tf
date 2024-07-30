@@ -22,21 +22,21 @@ data "theta_projects" "projects" {
 
 # Use a valid project ID from the fetched projects to create a deployment template
 resource "theta_deployment_template" "my_first_tf_managed_template" {
-  name            = "example-template"
+  name            = "stable-diffusion-service"
   project_id      = data.theta_projects.projects.projects[0].id
-  description     = "An example deployment template"
-  container_image = "example/image:latest"
-  container_port  = 8080
+  description     = "Image generation service "
+  container_image = ["thetalabsorg/sketch_to_3d:v0.0.1"]
+  container_port  = 7860
   env_vars = {
-    EXAMPLE_VAR = "example-value"
+    HUGGING_FACE_HUB_TOKEN = "hf_xxx"
   }
-  tags     = ["example", "template"]
-  icon_url = "https://example.com/icon.png"
+  tags     = ["ImageGen", "CodeGen"]
+  icon_url = ""
 }
 
-output "deployment_template_id" {
-  value = theta_deployment_template.my_first_tf_managed_template.id
-}
+# output "deployment_template_id" {
+#   value = theta_deployment_template.my_first_tf_managed_template.id
+# }
 
 # Fetch the list of deployment templates for the first project
 data "theta_deployment_templates" "templates" {

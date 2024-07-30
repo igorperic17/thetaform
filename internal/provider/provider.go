@@ -71,7 +71,7 @@ func (p *ThetaProvider) Configure(ctx context.Context, req provider.ConfigureReq
 
 func (p *ThetaProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewDeployment,
+		// NewDeployment,
 		DeploymentTemplateResource,
 	}
 }
