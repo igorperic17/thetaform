@@ -25,8 +25,8 @@ Watch a 5-minute walthrough of basic Thetaform usage:
 
 ### Prerequisites
 
-- **Terraform**: You need Terraform installed on your local machine. [Download Terraform](https://www.terraform.io/downloads).
-- **GitHub Secrets**: Add your Thetaform email and password to GitHub secrets for deployment actions.
+- **Terraform**: You need Terraform installed on your local machine -> [Install Terraform](https://www.terraform.io/downloads).
+- **Golang**: Install Golang compiler, since you'll need to build Thetaform locally -> [Install Golang](https://go.dev/doc/install).
 
 ### Setup
 
@@ -74,7 +74,13 @@ This will build and install Thetaform provider into ~/go/bin, after which you ar
 
 If everything went well you should see the link to your new IPython Notebook at the end of the successful deployment in your terminal.
 
-There are 4 example Terraform configuration files in the root of the repo, out of which the first three have .txt extension to prevent Terraform to apply all of them and cause conflicts. If you wish to test out other files or write your own, be aware that Terraform will apply ALL of the *.tf files in the current working directory. 
+There are 4 example Terraform configuration files in the root of the repo, out of which the first three have .txt extension to prevent Terraform to apply all of them and cause conflicts. If you wish to test out other files or write your own, be aware that Terraform will apply ALL of the *.tf files in the current working directory.
+
+## Known issues and limitations
+
+- Organizations and Projects have only data (read-only) resources
+- Deployments can only be created, update and delete is currently being implemented
+- Video resource is not yet implemented
 
 
 ## Contributing
