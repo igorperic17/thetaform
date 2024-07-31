@@ -42,7 +42,7 @@ resource "theta_deployment" "my_deployment" {
   deployment_image_id = theta_deployment_template.my_first_tf_managed_template.id
   container_image    = theta_deployment_template.my_first_tf_managed_template.container_images[0]
   min_replicas       = 1
-  max_replicas       = 1
+  max_replicas       = 3
   vm_id              = "vm_c1"  # Replace with an actual VM ID if needed
   annotations        = {
     tags     = "[\"ImageGen\",\"CodeGen\"]"

@@ -4,11 +4,22 @@
 
 Thetaform is a Terraform provider for Theta EdgeCloud. It lets you manage your Theta Network infrastructure as code using Terraform configuration files, bringing standard DevOps enterprise best practices to the Theta distributed compute network.
 
+Here is a Theta Hackathon 2024 submission page on DevPost deatailing the project: https://devpost.com/software/thetaform
+
+Check out the landing page for more info: https://thetaform.cloud
+
+Watch a 5-minute walthrough of basic Thetaform usage:
+[![hackathon video presentation](https://img.youtube.com/vi/FRjKTVJP9Ro/0.jpg)](https://www.youtube.com/watch?v=FRjKTVJP9Ro)
+
+
 ## Features
 
 - **Infrastructure as Code**: Define and provision your Theta EdgeCloud resources using Terraform configuration files.
 - **Automation**: Use Terraform’s automation capabilities to manage, update, and destroy your Theta Network infrastructure.
 - **Consistency**: Ensure consistent deployment and management of your Theta infrastructure across different environments.
+
+![Header Image](img/tf-code.png)
+![Header Image](img/code-1-back.png)
 
 ## Getting Started
 
@@ -24,73 +35,53 @@ Thetaform is a Terraform provider for Theta EdgeCloud. It lets you manage your T
    ```bash
    git clone https://github.com/igorperic17/thetaform.git
    cd thetaform
+2. **Configure Terraform for local provider install**
 
-2. **Configure Terraform**
+Since Thetaform is (yet!) not a part of the official HashiCorp set of providers, you will have to "trick" Terrafrom to look for a provider named "theta" in a custom path on your system, namely ~/go/bin. To do that, you'll have to add this content to your ~/.terraformrc file:
+    
+    provider_installation {
+        dev_overrides {
+            "hashicorp.com/edu/theta" = "~/go/bin"
+        }
 
-TODO: add link to local provider dev setup
+        direct {}
+    }
+
+The path might not support "~", so make sure to provide absolute path (/User/\<username> on Mac or /home/\<username> on Linux).
 
 3. **Configure Theta account credential**
 
-TODO: edit your .tfvars file
+Create a file "local.tfvars" in the root of the repo with the following content:
+
+    email    = "<your_theta_account_email>"
+    password = "<your_theta_account_password>"
+    hf_token = "<your_hf_token>"
+
+Make sure you leave the quotes in when replacing placeholders.
 
 4. **Deploy**
 
-Run "terraform apply" and you should see the link to your new IPython Notebook at the end of the successful deployment in your terminal.
+Technically you are ready to deploy, the only caveat is your provider is not built!
 
-Prerequisites
-Go: Install Go (version 1.16 or later).
-Terraform: Ensure Terraform is installed and available in your PATH.
-Setup
-Clone the Repository
+To do that you would have to run
 
-bash
-Copy code
-git clone https://github.com/your-username/thetaform.git
-cd thetaform
-Install Dependencies
+    go install .
 
-Ensure you have Go modules enabled. Run the following command to download necessary dependencies:
+This will build and install Thetaform provider into ~/go/bin, after which you are ready to run
 
-bash
-Copy code
-go mod tidy
-Build the Provider
+    terraform apply
+    
 
-Use the following command to build the provider:
+If everything went well you should see the link to your new IPython Notebook at the end of the successful deployment in your terminal.
 
-bash
-Copy code
-go build -o terraform-provider-theta
-Test the Provider
+There are 4 example Terraform configuration files in the root of the repo, out of which the first three have .txt extension to prevent Terraform to apply all of them and cause conflicts. If you wish to test out other files or write your own, be aware that Terraform will apply ALL of the *.tf files in the current working directory. 
 
-Run your tests to ensure everything is working correctly:
 
-bash
-Copy code
-go test ./...
-Link the Provider
-
-You can test your provider locally by creating a symbolic link to it in your Terraform plugin directory:
-
-bash
-Copy code
-mkdir -p ~/.terraform.d/plugins/registry.example.com/edu/theta/0.1.0/linux_amd64
-ln -s $(pwd)/terraform-provider-theta ~/.terraform.d/plugins/registry.example.com/edu/theta/0.1.0/linux_amd64/terraform-provider-theta
-Run Terraform
-
-Initialize Terraform to use your local provider:
-
-bash
-Copy code
-terraform init
-Documentation
-For more details, visit the Thetaform official webpage.
-
-Contributing
+## Contributing
 We welcome contributions to Thetaform! If you have any improvements or bug fixes, please submit a pull request or open an issue.
 
-License
+## License
 Thetaform is licensed under the MIT License.
 
-Contact
-For any questions or support, please contact us at support@example.com.
+## Contact
+For any questions or support, please contact me at igorperic@live.com.

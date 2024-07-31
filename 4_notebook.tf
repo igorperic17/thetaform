@@ -26,9 +26,11 @@ resource "theta_deployment_template" "my_first_tf_managed_template" {
   project_id        = data.theta_projects.projects.projects[0].id
   description       = "Basic Jupyter notebook template"
   container_images  = ["jupyter/base-notebook:latest"]
-  container_port    = 8888
+  container_port    = 8000
   container_args    = []
-  env_vars = { }
+  env_vars = {
+    PYTHON = "3.11"
+  }
   tags         = []
   icon_url     = ""
 }
