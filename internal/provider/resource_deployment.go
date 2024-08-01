@@ -120,20 +120,21 @@ func (r *deploymentResource) Create(ctx context.Context, req resource.CreateRequ
 	state := convertToDeploymentTerraformState(deployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
+
 func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state DeploymentTerraformState
-
-	// Retrieve the state from the request
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	// Example of logging the raw state data
+	resp.Diagnostics.AddWarning(fmt.Sprintf("Raw state data: %+v", state), "")
+
 	// Call Client's GetDeploymentByID method
 	deployment, err := r.client.GetDeploymentByID(state.ID.ValueString(), state.ProjectID.ValueString())
 	if err != nil {
 		if err.Error() == "Deployment not found" {
-			// Handle case where the deployment is not found
 			resp.State.RemoveResource(ctx)
 			resp.Diagnostics.AddWarning("Deployment Not Found", "The deployment with the specified ID was not found.")
 		} else {
@@ -149,8 +150,19 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
+	// image ID is not stored for a deployment and is not returned by this endpoint
+	// so we'll inject the value from the request
+	// this is OK because we don't care what the endpoint returns
+	// we want to compare what the .tf config file contains vs. the current .tfstate
+	deployment.DeploymentImageID = state.DeploymentImageID.ValueString()
+
 	// Convert the deployment to Terraform state
 	newState := convertToDeploymentTerraformState(deployment)
+
+	// Log state comparison for debugging
+	log.Printf("State Before: %+v", state)
+	log.Printf("New State From API: %+v", newState)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
 
