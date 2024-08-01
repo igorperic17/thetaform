@@ -123,21 +123,37 @@ func (r *deploymentResource) Create(ctx context.Context, req resource.CreateRequ
 func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state DeploymentTerraformState
 
+	// Retrieve the state from the request
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Call Client's GetDeploymentByID method
-	deployment, err := r.client.GetDeploymentByID(state.ID.ValueString())
+	deployment, err := r.client.GetDeploymentByID(state.ID.ValueString(), state.ProjectID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read deployment, got error: %s", err))
+		if err.Error() == "Deployment not found" {
+			// Handle case where the deployment is not found
+			resp.State.RemoveResource(ctx)
+			resp.Diagnostics.AddWarning("Deployment Not Found", "The deployment with the specified ID was not found.")
+		} else {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read deployment, got error: %s", err))
+		}
 		return
 	}
 
+	// If no deployment was returned, it means it wasn't found
+	if deployment == nil {
+		resp.State.RemoveResource(ctx)
+		resp.Diagnostics.AddWarning("Deployment Not Found", "The deployment with the specified ID was not found.")
+		return
+	}
+
+	// Convert the deployment to Terraform state
 	newState := convertToDeploymentTerraformState(deployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
+
 func (r *deploymentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan DeploymentCreateRequest
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -154,7 +170,7 @@ func (r *deploymentResource) Update(ctx context.Context, req resource.UpdateRequ
 	nativePlan := convertDeploymentToNativePlan(plan)
 
 	// Call Client's UpdateDeployment method
-	deployment, err := r.client.UpdateDeployment(state.ID.ValueString(), nativePlan)
+	deployment, err := r.client.UpdateDeployment(state.ID.ValueString(), state.ProjectID.ValueString(), nativePlan)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update deployment, got error: %s", err))
 		return
@@ -171,7 +187,7 @@ func (r *deploymentResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 
 	// Call Client's DeleteDeployment method
-	_, err := r.client.DeleteDeployment(state.ID.ValueString())
+	_, err := r.client.DeleteDeployment(state.ID.ValueString(), state.ProjectID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete deployment, got error: %s", err))
 		return
@@ -218,19 +234,20 @@ func convertDeploymentToNativePlan(plan DeploymentCreateRequest) DeploymentCreat
 		URL:               plan.URL.ValueString(),
 	}
 }
+
 func convertToDeploymentTerraformState(deployment *Deployment) DeploymentTerraformState {
 	return DeploymentTerraformState{
-		ID:                types.StringValue(deployment.Suffix), // Use Suffix as ID
+		ID:                types.StringValue(deployment.ID),
 		Name:              types.StringValue(deployment.Name),
 		ProjectID:         types.StringValue(deployment.ProjectID),
-		DeploymentImageID: types.StringNull(), // Not used, so set to null
-		ContainerImage:    types.StringValue(deployment.ImageURL),
-		MinReplicas:       types.Int64Value(1), // Assuming default value for MinReplicas
-		MaxReplicas:       types.Int64Value(deployment.Replicas),
-		VMID:              types.StringValue(deployment.MachineType),
+		DeploymentImageID: types.StringValue(deployment.DeploymentImageID),
+		ContainerImage:    types.StringValue(deployment.ContainerImage),
+		MinReplicas:       types.Int64Value(deployment.MinReplicas),
+		MaxReplicas:       types.Int64Value(deployment.MaxReplicas),
+		VMID:              types.StringValue(deployment.VMID),
 		Annotations:       convertToTypesStringMap(deployment.Annotations),
 		AuthUsername:      types.StringValue(deployment.AuthUsername),
 		AuthPassword:      types.StringValue(deployment.AuthPassword),
-		URL:               types.StringValue(deployment.Endpoint),
+		URL:               types.StringValue(deployment.URL),
 	}
 }

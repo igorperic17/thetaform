@@ -135,32 +135,100 @@ func extractDeploymentID(url string) (string, error) {
 	return parts[len(parts)-1], nil
 }
 
-func (c *Client) GetDeploymentByID(id string) (*Deployment, error) {
-	url := fmt.Sprintf("%s/deployment/%s", c.baseControllerURL, id)
+func (c *Client) GetDeploymentByID(id string, projectID string) (*Deployment, error) {
+	// URL to list all deployments
+	url := fmt.Sprintf("%s/deployments/list?project_id=%s", c.baseControllerURL, projectID)
 
-	// Send the request using the utility function
+	// Perform the HTTP request
 	respBody, err := sendRequest(c, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	var result struct {
-		Status string     `json:"status"`
-		Body   Deployment `json:"body"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	// Process the response body
+	var rawResponse map[string]interface{}
+	if err := json.Unmarshal(respBody, &rawResponse); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	if result.Status != "success" {
-		return nil, fmt.Errorf("API returned an error: %s", result.Status)
+	// Ensure the response contains a "body" field
+	body, ok := rawResponse["body"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected response format: missing or invalid body field")
 	}
 
-	return &result.Body, nil
+	// Search for the deployment with the matching Suffix
+	for _, item := range body {
+		deploymentData, ok := item.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("unexpected response format: invalid item format")
+		}
+
+		// Check if the "Suffix" matches the requested ID
+		if suffix, ok := deploymentData["Suffix"].(string); ok && suffix == id {
+			// Create and populate Deployment struct
+			deployment := &Deployment{
+				ID:                suffix,
+				Name:              getStringValue(deploymentData, "Name"),
+				ProjectID:         getStringValue(deploymentData, "ProjectID"),
+				DeploymentImageID: getStringValue(deploymentData, "DeploymentImageID"),
+				ContainerImage:    getStringValue(deploymentData, "ContainerImage"),
+				MinReplicas:       getInt64Value(deploymentData, "MinReplicas"),
+				MaxReplicas:       getInt64Value(deploymentData, "MaxReplicas"),
+				VMID:              getStringValue(deploymentData, "VMID"),
+				Annotations:       convertToStringMap(getMapValue(deploymentData, "Annotations")),
+				AuthUsername:      getStringValue(deploymentData, "AuthUsername"),
+				AuthPassword:      getStringValue(deploymentData, "AuthPassword"),
+				URL:               getStringValue(deploymentData, "Endpoint"),
+			}
+
+			return deployment, nil
+		}
+	}
+
+	// Deployment not found
+	return nil, fmt.Errorf("Deployment not found")
 }
 
-func (c *Client) UpdateDeployment(id string, req DeploymentCreateRequestNative) (*Deployment, error) {
-	url := fmt.Sprintf("%s/deployment/%s", c.baseControllerURL, id)
+// Utility function to safely get a string value from a map
+func getStringValue(data map[string]interface{}, key string) string {
+	if value, ok := data[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+// Utility function to safely get an int64 value from a map
+func getInt64Value(data map[string]interface{}, key string) int64 {
+	if value, ok := data[key].(float64); ok {
+		return int64(value)
+	}
+	return 0
+}
+
+// Utility function to safely get a map value from a map
+func getMapValue(data map[string]interface{}, key string) map[string]interface{} {
+	if value, ok := data[key].(map[string]interface{}); ok {
+		return value
+	}
+	return nil
+}
+
+func convertToStringMap(input map[string]interface{}) map[string]string {
+	result := make(map[string]string)
+	for key, value := range input {
+		strValue, ok := value.(string)
+		if !ok {
+			// Handle cases where the value is not a string
+			strValue = fmt.Sprintf("%v", value) // Convert non-string values to string
+		}
+		result[key] = strValue
+	}
+	return result
+}
+
+func (c *Client) UpdateDeployment(id string, projectID string, req DeploymentCreateRequestNative) (*Deployment, error) {
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseControllerURL, id, projectID)
 
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -187,8 +255,8 @@ func (c *Client) UpdateDeployment(id string, req DeploymentCreateRequestNative) 
 
 	return &result.Body, nil
 }
-func (c *Client) DeleteDeployment(id string) (bool, error) {
-	url := fmt.Sprintf("%s/deployment/%s", c.baseControllerURL, id)
+func (c *Client) DeleteDeployment(id string, projectID string) (bool, error) {
+	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseControllerURL, id, projectID)
 
 	// Send the request using the utility function
 	respBody, err := sendRequest(c, "DELETE", url, nil)
