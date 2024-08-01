@@ -173,7 +173,7 @@ func (c *Client) GetDeploymentByID(id string, projectID string) (*Deployment, er
 				ProjectID:         getStringValue(deploymentData, "ProjectID"),
 				DeploymentImageID: getStringValue(deploymentData, "DeploymentImageID"),
 				ContainerImage:    getStringValue(deploymentData, "ContainerImage"),
-				MinReplicas:       getInt64Value(deploymentData, "MinReplicas"),
+				MinReplicas:       1,
 				MaxReplicas:       getInt64Value(deploymentData, "MaxReplicas"),
 				VMID:              getStringValue(deploymentData, "VMID"),
 				Annotations:       convertToStringMap(getMapValue(deploymentData, "Annotations")),
@@ -255,6 +255,7 @@ func (c *Client) UpdateDeployment(id string, projectID string, req DeploymentCre
 
 	return &result.Body, nil
 }
+
 func (c *Client) DeleteDeployment(id string, projectID string) (bool, error) {
 	url := fmt.Sprintf("%s/deployment/1/%s?project_id=%s", c.baseControllerURL, id, projectID)
 
@@ -264,10 +265,25 @@ func (c *Client) DeleteDeployment(id string, projectID string) (bool, error) {
 		return false, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	// Check the response body to determine success
-	if string(respBody) == "" {
+	// Process the response body
+	var response struct {
+		Status string                 `json:"status"`
+		Body   map[string]interface{} `json:"body"`
+	}
+
+	if err := json.Unmarshal(respBody, &response); err != nil {
+		return false, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	// Check if the status is "success"
+	if response.Status != "success" {
+		return false, fmt.Errorf("API returned an error: %v", response.Body)
+	}
+
+	// Check if the body contains a specific field to confirm deletion
+	if value, ok := response.Body["value"]; ok && value == float64(0) {
 		return true, nil
 	}
 
-	return false, fmt.Errorf("unexpected response body: %s", string(respBody))
+	return false, fmt.Errorf("unexpected response body: %v", response.Body)
 }
