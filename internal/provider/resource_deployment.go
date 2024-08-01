@@ -129,7 +129,7 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 
 	// Example of logging the raw state data
-	resp.Diagnostics.AddWarning(fmt.Sprintf("Raw state data: %+v", state), "")
+	// resp.Diagnostics.AddWarning(fmt.Sprintf("Raw state data: %+v", state), "")
 
 	// Call Client's GetDeploymentByID method
 	deployment, err := r.client.GetDeploymentByID(state.ID.ValueString(), state.ProjectID.ValueString())
@@ -165,7 +165,6 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
-
 func (r *deploymentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan DeploymentCreateRequest
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -179,18 +178,29 @@ func (r *deploymentResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	nativePlan := convertDeploymentToNativePlan(plan)
-
-	// Call Client's UpdateDeployment method
-	deployment, err := r.client.UpdateDeployment(state.ID.ValueString(), state.ProjectID.ValueString(), nativePlan)
+	// Delete the existing resource
+	_, err := r.client.DeleteDeployment(state.ID.ValueString(), state.ProjectID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update deployment, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete deployment, got error: %s", err))
 		return
 	}
 
+	// Create the new resource
+	nativePlan := convertDeploymentToNativePlan(plan)
+	deployment, err := r.client.CreateDeployment(nativePlan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating deployment",
+			"Could not create deployment, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	// Update the state with the new resource details
 	newState := convertToDeploymentTerraformState(deployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
+
 func (r *deploymentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state DeploymentTerraformState
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
