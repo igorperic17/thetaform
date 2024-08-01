@@ -41,3 +41,8 @@ hf_token = "your_hf_token"
 go mod tidy
 go install .
 
+# Step 6 - Provision resources on Theta EdgeCloud!
+terraform apply --var-file=local.tfvars
+
+# Edit 4_notebook.tf to make edits to the deployment if you wish
+

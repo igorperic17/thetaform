@@ -30,6 +30,14 @@ Watch a 5-minute walthrough of basic Thetaform usage:
 
 ### Setup
 
+Quick way (if running Ubuntu): use the script local_setup.sh in the root of this repo.
+
+Before executing it make sure to set the $ARCH variable to your system architecture "arm64/amd64" and insert your Theta account credentials.
+
+Executing the script will install Terraform, Golang, clone the repo, configure the provider for local running, and execute "terraform apply" once.
+
+If you with to skip some steps or you are not running Ubuntu, please follow steps bellow.
+
 1. **Clone the Repository**
 
    ```bash
@@ -47,7 +55,7 @@ Since Thetaform is (yet!) not a part of the official HashiCorp set of providers,
         direct {}
     }
 
-The path might not support "~", so make sure to provide absolute path (/User/\<username> on Mac or /home/\<username> on Linux).
+The path does not support "~", so make sure to provide absolute path (/User/\<username> on Mac or /home/\<username> on Linux).
 
 3. **Configure Theta account credential**
 
@@ -65,11 +73,12 @@ Technically you are ready to deploy, the only caveat is your provider is not bui
 
 To do that you would have to run
 
+    go mod tidy
     go install .
 
 This will build and install Thetaform provider into ~/go/bin, after which you are ready to run
 
-    terraform apply
+    terraform apply --var-file=local.tfvars
     
 
 If everything went well you should see the link to your new IPython Notebook at the end of the successful deployment in your terminal.
@@ -79,7 +88,6 @@ There are 4 example Terraform configuration files in the root of the repo, out o
 ## Known issues and limitations
 
 - Organizations and Projects have only data (read-only) resources
-- Deployments can only be created, update and delete is currently being implemented
 - Video resource is not yet implemented
 
 
