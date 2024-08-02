@@ -43,6 +43,7 @@ If you with to skip some steps or you are not running Ubuntu, please follow step
    ```bash
    git clone https://github.com/igorperic17/thetaform.git
    cd thetaform
+   
 2. **Configure Terraform for local provider install**
 
 Since Thetaform is (yet!) not a part of the official HashiCorp set of providers, you will have to "trick" Terrafrom to look for a provider named "theta" in a custom path on your system, namely ~/go/bin. To do that, you'll have to add this content to your ~/.terraformrc file:
